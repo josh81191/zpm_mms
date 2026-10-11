@@ -24,4 +24,4 @@ $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS members_family_head_depth ON members;
 CREATE TRIGGER members_family_head_depth
     BEFORE INSERT OR UPDATE OF family_head_id ON members
-    FOR EACH ROW EXECUTE FUNCTION enforce_family_head_depth();
+    FOR EACH ROW EXECUTE PROCEDURE enforce_family_head_depth();
