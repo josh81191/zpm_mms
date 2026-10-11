@@ -29,6 +29,23 @@ Use a dedicated PostgreSQL application account with only the database privileges
 
 6. Start Apache and open the configured local URL. Sign in with the administrator account you created.
 
+### Development demo accounts
+
+For local testing only, create four role-specific demo accounts:
+
+```powershell
+C:\xampp\php\php.exe scripts\create-demo-users.php
+```
+
+The script runs only when `environment` is `development`, is idempotent, and must never be run in production. It creates the credentials listed below:
+
+| Role | Email | Password |
+| --- | --- | --- |
+| System Administrator | `admin@zpm.test` | `ZpmDemo!2026Admin` |
+| Authorized Central Office User | `central.office@zpm.test` | `ZpmDemo!2026Central` |
+| Data Entry Operator | `data.entry@zpm.test` | `ZpmDemo!2026Data` |
+| Read-Only User | `readonly@zpm.test` | `ZpmDemo!2026Read` |
+
 ## Initial roles
 
 The migration creates and uses the dedicated `zpm_mms` PostgreSQL schema. Application tables and migration history are not created in `public`. The migration provides four proposed roles: `system-administrator`, `central-office`, `data-entry`, and `read-only`. Their server-side permissions are stored in `roles`, `permissions`, and `role_permissions`; links and visual controls are not relied upon for authorization.
