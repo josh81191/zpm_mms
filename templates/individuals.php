@@ -3,7 +3,7 @@
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title><?= $e($appName) ?> — Registered individuals</title><link rel="stylesheet" href="<?= $e($basePath) ?>/assets/app.css"></head>
 <body>
-<header class="app-header"><p class="brand">ZPM Registry &amp; GIS</p><div class="user-menu"><span><?= $e($user['full_name']) ?></span><form method="post" action="<?= $e($basePath) ?>/logout"><input type="hidden" name="_csrf" value="<?= $e($csrfToken) ?>"><button class="logout" type="submit">Sign out</button></form></div></header>
+<?php require __DIR__ . '/partials/header.php'; ?>
 <div class="layout"><?php require __DIR__ . '/partials/nav.php'; ?>
 <main class="main">
 <div class="section-heading"><h1>Registered individuals</h1><?php if ($permissions['members.manage'] ?? false): ?><a class="button-link primary-link" href="<?= $e($basePath) ?>/individuals/new">Register individual</a><?php endif; ?></div>

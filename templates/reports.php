@@ -7,16 +7,7 @@
     <link rel="stylesheet" href="<?= htmlspecialchars($basePath, ENT_QUOTES, 'UTF-8') ?>/assets/app.css">
 </head>
 <body>
-    <header class="app-header">
-        <p class="brand">ZPM Registry &amp; GIS</p>
-        <div class="user-menu">
-            <span><?= htmlspecialchars($user['full_name'], ENT_QUOTES, 'UTF-8') ?></span>
-            <form method="post" action="<?= htmlspecialchars($basePath, ENT_QUOTES, 'UTF-8') ?>/logout">
-                <input type="hidden" name="_csrf" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
-                <button class="logout" type="submit">Sign out</button>
-            </form>
-        </div>
-    </header>
+    <?php require __DIR__ . '/partials/header.php'; ?>
     <div class="layout">
         <?php require __DIR__ . '/partials/nav.php'; ?>
         <main class="main">

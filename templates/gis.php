@@ -10,26 +10,24 @@
 </head>
 
 <body>
-  <header class="app-header">
-    <p class="brand">ZPM Registry &amp; GIS</p>
-    <div class="user-menu"><span><?php echo htmlspecialchars($user['full_name'], ENT_QUOTES, 'UTF-8') ?></span></div>
-  </header>
+  <?php require __DIR__ . '/partials/header.php'; ?>
   <div class="layout"><?php require __DIR__ . '/partials/nav.php'; ?><main class="main">
-      <h1>GIS &amp; Maps</h1>
       <section class="content-card">
-        <p class="muted">Development map showing synthetic unit reference points and aggregate counts of registered
-          individuals. No individual is geolocated; classification counts are hidden for units with fewer than 5 non-ZPM individuals.</p>
-        <div class="field map-mode"><label for="map-mode">Show</label>
-          <select id="map-mode">
-            <option value="total">All registered individuals</option>
-            <option value="zpm">ZPM</option>
-            <option value="non_zpm">Non-ZPM (all)</option>
-            <option value="green">Non-ZPM — Green</option>
-            <option value="yellow">Non-ZPM — Yellow</option>
-            <option value="red">Non-ZPM — Red</option>
-          </select></div>
-        <?php require __DIR__ . '/partials/legend.php'; ?>
-        <div id="map" class="map" aria-label="Unit aggregate map"></div>
+        <div class="gis-controls">
+          <div class="field"><label for="map-level">Geographic level</label>
+            <select id="map-level">
+              <option value="district">District</option>
+              <option value="block">Block</option>
+            </select>
+          </div>
+          <div class="field"><label for="map-area">Area</label>
+            <select id="map-area">
+              <option value="">Loading areas…</option>
+            </select>
+          </div>
+        </div>
+        <p class="muted" id="gis-map-message" aria-live="polite"></p>
+        <div id="map" class="map" aria-label="Map with party population pie charts by district or block"></div>
       </section>
     </main>
   </div>

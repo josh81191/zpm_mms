@@ -113,6 +113,7 @@ tbody tr:hover { background: #f8fbff; }
 .chart-box { height: 20rem; margin: 1rem 0; position: relative; }
 .breakdown { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); }
 .breakdown div { background: var(--surface-muted); border: 1px solid var(--line); border-radius: 10px; padding: .9rem; }
+.gis-controls { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-bottom: 1.25rem; max-width: 720px; }
 .breakdown strong { color: var(--navy); display: block; font-size: 1.35rem; font-variant-numeric: tabular-nums; }
 .trend-list { display: grid; gap: .7rem; }
 .trend-row { align-items: center; display: grid; gap: .5rem; grid-template-columns: 5rem 1fr 2rem; }
@@ -133,6 +134,22 @@ tbody tr:hover { background: #f8fbff; }
 .link-button { background: transparent; border: 0; box-shadow: none; color: var(--blue-dark); font-size: inherit; font-weight: 600; min-height: auto; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
 .link-button:hover { background: transparent; color: var(--navy); }
 .map { border: 1px solid var(--line); border-radius: 10px; height: 600px; min-height: 400px; overflow: hidden; }
+.party-map-legend { background: rgb(255 255 255 / 96%); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 1px 5px rgb(0 0 0 / 25%); color: var(--ink); line-height: 1.5; padding: .6rem .75rem; }
+.party-map-legend strong, .party-map-legend span { display: block; white-space: nowrap; }
+.party-map-legend strong { margin-bottom: .2rem; }
+.party-map-legend i { border-radius: 50%; display: inline-block; height: .65rem; margin-right: .4rem; width: .65rem; }
+.party-color-zpm { background: #137a68; }
+.party-color-mnf { background: #b42318; }
+.party-color-congress { background: #2563eb; }
+.party-color-bjp { background: #f59e0b; }
+.party-color-other { background: #64748b; }
+.party-color-suppressed { background: #aab4c2; }
+.party-pie-marker { background: transparent; border: 0; }
+.party-pie-marker div { align-items: center; display: flex; flex-direction: column; filter: drop-shadow(0 1px 2px rgb(0 0 0 / 45%)); }
+.party-pie { border: 2px solid #fff; border-radius: 50%; display: block; height: 32px; width: 32px; }
+.party-pie-large .party-pie { border-width: 3px; height: 46px; width: 46px; }
+.party-pie-large .party-pie-total { font-size: .75rem; max-width: 90px; padding: 2px 8px; }
+.party-pie-total { background: #fff; border: 1px solid #64748b; border-radius: 999px; color: var(--ink); font-size: .65rem; line-height: 1.15; margin-top: -2px; max-width: 60px; overflow: hidden; padding: 1px 4px; text-overflow: ellipsis; }
 
 @media (max-width: 900px) {
     .layout { grid-template-columns: 210px minmax(0, 1fr); }

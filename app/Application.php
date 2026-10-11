@@ -12,7 +12,7 @@ final class Application
 {
     private const PARTIES = ['zpm', 'mnf', 'congress', 'bjp', 'other'];
     private const CLASSIFICATIONS = ['green', 'yellow', 'red'];
-    // Classification breakdowns are hidden on maps when a unit has fewer non-ZPM individuals than this.
+    // Small party counts are grouped on GIS summaries to reduce disclosure risk.
     private const MAP_DISCLOSURE_THRESHOLD = 5;
 
     private Auth $auth;
@@ -154,9 +154,9 @@ final class Application
                 return;
             }
 
-            if ($method === 'GET' && $path === '/gis/units.geojson') {
+            if ($method === 'GET' && $path === '/gis/party-data') {
                 $this->requirePermission('reports.view');
-                $this->geoJsonUnits();
+                $this->gisPartyData($_GET);
                 return;
             }
 
@@ -886,41 +886,82 @@ final class Application
         $statement->execute(['block_id' => $blockId, 'unit_code' => 'UNIT-' . strtoupper(bin2hex(random_bytes(4))), 'name' => $name, 'unit_type' => $type, 'remarks' => 'Created through organizational management.']);
     }
 
-    private function geoJsonUnits(): void
+    private function gisPartyData(array $input): void
     {
+        $level = ($input['level'] ?? 'district') === 'block' ? 'block' : 'district';
+        if ($level === 'district') {
+            $from = 'districts area';
+            $joins = 'LEFT JOIN blocks b ON b.district_id = area.id
+                      LEFT JOIN units u ON u.block_id = b.id';
+            $location = "area.name AS district_name, NULL::text AS block_name,
+                         public.ST_AsGeoJSON(COALESCE(area.boundary, area.representative_location)) AS geometry,
+                         public.ST_AsGeoJSON(COALESCE(
+                             public.ST_PointOnSurface(area.boundary),
+                             area.representative_location
+                         )) AS chart_location";
+            $groupBy = 'area.id, area.name, area.boundary, area.representative_location';
+            $orderBy = 'area.name';
+        } else {
+            $from = 'blocks area';
+            $joins = 'INNER JOIN districts d ON d.id = area.district_id
+                      LEFT JOIN units u ON u.block_id = area.id';
+            $location = 'd.name AS district_name, area.name AS block_name,
+                         public.ST_AsGeoJSON(COALESCE(area.boundary, area.representative_location)) AS geometry,
+                         public.ST_AsGeoJSON(COALESCE(
+                             public.ST_PointOnSurface(area.boundary),
+                             area.representative_location
+                         )) AS chart_location';
+            $groupBy = 'area.id, area.name, d.name, area.boundary, area.representative_location';
+            $orderBy = 'd.name, area.name';
+        }
+
         $rows = $this->database->connection()->query(
-            "SELECT u.id, u.unit_code, u.name, d.name AS district_name, b.name AS block_name,
-                    count(m.id) AS member_count,
+            "SELECT area.id, area.name, {$location},
+                    count(m.id) AS total_count,
                     count(m.id) FILTER (WHERE m.party = 'zpm') AS zpm_count,
-                    count(m.id) FILTER (WHERE m.party <> 'zpm') AS non_zpm_count,
-                    count(m.id) FILTER (WHERE m.classification = 'green') AS green_count,
-                    count(m.id) FILTER (WHERE m.classification = 'yellow') AS yellow_count,
-                    count(m.id) FILTER (WHERE m.classification = 'red') AS red_count,
-                    public.ST_AsGeoJSON(u.representative_location)::json AS geometry
-             FROM units u INNER JOIN blocks b ON b.id = u.block_id INNER JOIN districts d ON d.id = b.district_id
+                    count(m.id) FILTER (WHERE m.party = 'mnf') AS mnf_count,
+                    count(m.id) FILTER (WHERE m.party = 'congress') AS congress_count,
+                    count(m.id) FILTER (WHERE m.party = 'bjp') AS bjp_count,
+                    count(m.id) FILTER (WHERE m.party = 'other') AS other_count
+             FROM {$from}
+             {$joins}
              LEFT JOIN members m ON m.current_unit_id = u.id
-             WHERE u.representative_location IS NOT NULL
-             GROUP BY u.id, u.unit_code, u.name, d.name, b.name, u.representative_location
-             ORDER BY d.name, b.name, u.name"
+             GROUP BY {$groupBy}
+             ORDER BY {$orderBy}"
         )->fetchAll();
-        $features = array_map(static fn (array $row): array => [
-            'type' => 'Feature',
-            'geometry' => json_decode((string) $row['geometry'], true, 512, JSON_THROW_ON_ERROR),
-            'properties' => [
-                'unit_code' => $row['unit_code'],
-                'name' => $row['name'],
+
+        $areas = array_map(static function (array $row): array {
+            $counts = [];
+            $suppressed = 0;
+            foreach (['zpm', 'mnf', 'congress', 'bjp', 'other'] as $party) {
+                $count = (int) $row[$party . '_count'];
+                if ($count > 0 && $count < self::MAP_DISCLOSURE_THRESHOLD) {
+                    $suppressed += $count;
+                    $count = 0;
+                }
+                $counts[$party] = $count;
+            }
+            $counts['suppressed'] = $suppressed;
+
+            return [
+                'id' => (int) $row['id'],
+                'name' => (string) $row['name'],
                 'district' => $row['district_name'],
                 'block' => $row['block_name'],
-                'member_count' => (int) $row['member_count'],
-                'zpm_count' => (int) $row['zpm_count'],
-                'non_zpm_count' => (int) $row['non_zpm_count'],
-                'classification' => (int) $row['non_zpm_count'] >= self::MAP_DISCLOSURE_THRESHOLD
-                    ? ['green' => (int) $row['green_count'], 'yellow' => (int) $row['yellow_count'], 'red' => (int) $row['red_count']]
-                    : null,
-            ],
-        ], $rows);
-        header('Content-Type: application/geo+json; charset=utf-8');
-        echo json_encode(['type' => 'FeatureCollection', 'features' => $features], JSON_THROW_ON_ERROR);
+                'total' => (int) $row['total_count'],
+                'parties' => $counts,
+                'geometry' => $row['geometry'] === null
+                    ? null
+                    : json_decode((string) $row['geometry'], true, 512, JSON_THROW_ON_ERROR),
+                'chart_location' => $row['chart_location'] === null
+                    ? null
+                    : json_decode((string) $row['chart_location'], true, 512, JSON_THROW_ON_ERROR),
+            ];
+        }, $rows);
+
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store');
+        echo json_encode(['level' => $level, 'areas' => $areas], JSON_THROW_ON_ERROR);
     }
 
     private function flash(string $key, ?string $value = null): ?string

@@ -2,7 +2,7 @@
 <!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title><?= $e($appName) ?> — <?= $member === null ? 'Register' : 'Edit' ?> individual</title><link rel="stylesheet" href="<?= $e($basePath) ?>/assets/app.css"></head>
-<body><header class="app-header"><p class="brand">ZPM Registry &amp; GIS</p><div class="user-menu"><span><?= $e($user['full_name']) ?></span></div></header>
+<body><?php require __DIR__ . '/partials/header.php'; ?>
 <div class="layout"><?php require __DIR__ . '/partials/nav.php'; ?><main class="main">
 <h1><?= $member === null ? 'Register individual' : 'Edit registered individual' ?></h1>
 <section class="content-card"><form method="post" action="<?= $e($basePath) ?>/individuals" data-prevent-repeat="true"><input type="hidden" name="_csrf" value="<?= $e($csrfToken) ?>"><?php if ($member !== null): ?><input type="hidden" name="id" value="<?= (int) $member['id'] ?>"><?php endif; ?>

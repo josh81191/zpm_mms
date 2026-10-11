@@ -8,7 +8,7 @@
 </head>
 <body class="auth-page">
     <main class="auth-card">
-        <h1 class="brand">ZPM Registry &amp; GIS</h1>
+        <h1 class="brand">ZPM Member Registry</h1>
         <p class="subtitle">Sign in to access authorized organizational records.</p>
         <?php if ($error !== null): ?>
             <div class="alert" role="alert"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div>
