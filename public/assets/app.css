@@ -101,6 +101,7 @@ tbody tr:hover { background: #f8fbff; }
 .legend { align-items: center; display: flex; flex-wrap: wrap; font-size: .82rem; gap: .6rem; margin: .8rem 0; }
 .map-mode { max-width: 18rem; }
 .is-hidden { display: none; }
+.chart-box { height: 20rem; margin: 1rem 0; position: relative; }
 .breakdown { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); }
 .breakdown div { background: var(--surface-muted); border: 1px solid var(--line); border-radius: 10px; padding: .9rem; }
 .breakdown strong { color: var(--navy); display: block; font-size: 1.35rem; font-variant-numeric: tabular-nums; }

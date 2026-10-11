@@ -66,7 +66,7 @@ final class Application
 
             if ($method === 'GET' && $path === '/dashboard') {
                 $this->requirePermission('dashboard.view');
-                $this->view->render('dashboard', $this->pageData($this->reportData($_GET)));
+                $this->view->render('dashboard', $this->pageData($this->reportData($_GET) + ['partyMovement' => $this->partyMovement()]));
                 return;
             }
 
@@ -185,6 +185,40 @@ final class Application
             $this->renderError('You do not have permission to access this page.', 403);
             exit;
         }
+    }
+
+    private function partyMovement(): array
+    {
+        $statement = $this->database->connection()->query(
+            "WITH months AS (
+                SELECT generate_series(date_trunc('month', CURRENT_DATE) - INTERVAL '11 months', date_trunc('month', CURRENT_DATE), INTERVAL '1 month') AS month_start
+             ), changes AS (
+                SELECT date_trunc('month', recorded_at) AS month_start, previous_party, new_party
+                FROM party_classification_history
+                WHERE previous_party IS NOT NULL AND previous_party <> new_party
+                  AND recorded_at >= date_trunc('month', CURRENT_DATE) - INTERVAL '11 months'
+             )
+             SELECT to_char(m.month_start, 'Mon YYYY') AS label, p.party,
+                    (SELECT count(*) FROM changes c WHERE c.month_start = m.month_start AND c.new_party = p.party) AS joined,
+                    (SELECT count(*) FROM changes c WHERE c.month_start = m.month_start AND c.previous_party = p.party) AS left_party
+             FROM months m CROSS JOIN (VALUES ('zpm'), ('mnf'), ('congress'), ('bjp'), ('other')) AS p(party)
+             ORDER BY m.month_start, p.party"
+        );
+        $labels = [];
+        $series = [];
+        foreach (self::PARTIES as $party) {
+            $series[$party] = ['joined' => [], 'left' => [], 'net' => []];
+        }
+        foreach ($statement->fetchAll() as $row) {
+            if (!in_array($row['label'], $labels, true)) {
+                $labels[] = $row['label'];
+            }
+            $series[$row['party']]['joined'][] = (int) $row['joined'];
+            $series[$row['party']]['left'][] = (int) $row['left_party'];
+            $series[$row['party']]['net'][] = (int) $row['joined'] - (int) $row['left_party'];
+        }
+        $total = array_sum(array_map('array_sum', array_column($series, 'joined')));
+        return ['labels' => $labels, 'series' => $series, 'total' => $total];
     }
 
     private function dashboardStats(array $input): array

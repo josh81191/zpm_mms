@@ -117,3 +117,11 @@ Database-backed login validation requires the PostgreSQL driver and a configured
 - Every registered individual has a party: ZPM, MNF, Congress, BJP, or Other (with a party name).
 - Individuals whose party is not ZPM must carry a classification: Green, Yellow, or Red. ZPM individuals have none. This rule is enforced both in the application and by a database constraint (migration 004).
 - The definition of each colour is to be confirmed by the project owner.
+
+## Party migration chart
+
+The dashboard shows net monthly party change for the past 12 months across all Mizoram, from party_classification_history. For demo data run:
+
+    C:\xampp\php\php.exe scripts\seed-party-movement.php
+
+The script is idempotent and development-only.
