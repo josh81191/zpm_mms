@@ -17,4 +17,13 @@ return [
         'sslmode'  => 'prefer',
         'schema'   => 'zpm_mms',
     ],
+    // Optional AI question planner. Only the question text and a data-free schema are sent.
+    // Use a local Ollama server (no data leaves the machine) or an approved OpenAI-compatible provider.
+    'ai'           => [
+        'enabled'  => false,
+        'base_url' => 'http://localhost:11434/v1',
+        'model'    => 'llama3.1:8b',
+        'api_key'  => '',
+        'timeout'  => 40,
+    ],
 ];

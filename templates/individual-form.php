@@ -17,6 +17,22 @@
 <div class="field" id="classification-note-field"><label for="classification_note">Classification note</label><input id="classification_note" name="classification_note" value="<?= $e($m['classification_note'] ?? '') ?>"></div>
 <div class="field field-wide"><label for="current_unit_id">Organizational unit</label><select id="current_unit_id" name="current_unit_id" required><option value="">Select a unit</option><?php foreach ($unitOptions as $unit): ?><option value="<?= (int) $unit['id'] ?>" <?= (int) ($m['current_unit_id'] ?? 0) === (int) $unit['id'] ? 'selected' : '' ?>><?= $e($unit['district_name'] . ' / ' . $unit['block_name'] . ' / ' . $unit['unit_name']) ?></option><?php endforeach; ?></select></div>
 <div class="field field-wide"><label for="remarks">Administrative remarks</label><textarea id="remarks" name="remarks" rows="4"><?= $e($m['remarks'] ?? '') ?></textarea></div>
+<?php if (empty($familyMembers)): ?>
+<div class="field field-wide" id="family-head-field" data-search-url="<?= $e($basePath) ?>/individuals/heads" data-exclude="<?= (int) ($m['id'] ?? 0) ?>">
+<label for="family-head-search">Family head (optional)</label>
+<input type="hidden" id="family_head_id" name="family_head_id" value="<?= $e($familyHead['id'] ?? '') ?>">
+<div class="family-selected" id="family-selected"<?= $familyHead === null ? ' hidden' : '' ?>><span id="family-selected-label"><?= $familyHead !== null ? $e($familyHead['full_name'] . ' (' . $familyHead['member_code'] . ')') : '' ?></span> <button type="button" class="link-button" id="family-clear">Remove</button></div>
+<input id="family-head-search" type="search" autocomplete="off" placeholder="Type a name or record code to tie this person to a family head"<?= $familyHead !== null ? ' hidden' : '' ?>>
+<ul class="family-results" id="family-results" hidden></ul>
+<p class="muted">Leave empty if this person is independent or is themselves a family head.</p>
 </div>
+<?php endif; ?>
+</div>
+<?php if (!empty($familyMembers)): ?>
+<h2>Family members (this person is the family head)</h2>
+<div class="table-wrap"><table><thead><tr><th>Code</th><th>Name</th><th>Status</th><th></th></tr></thead><tbody>
+<?php foreach ($familyMembers as $fm): ?><tr><td><?= $e($fm['member_code']) ?></td><td><?= $e($fm['full_name']) ?></td><td><?= $e(ucfirst($fm['membership_status'])) ?></td><td><a href="<?= $e($basePath) ?>/individuals/<?= (int) $fm['id'] ?>/edit">Open</a></td></tr><?php endforeach; ?>
+</tbody></table></div>
+<?php endif; ?>
 <?php require __DIR__ . '/partials/legend.php'; ?>
 <button type="submit">Save</button> <a class="button-link" href="<?= $e($basePath) ?>/individuals">Cancel</a></form></section></main></div><script src="<?= $e($basePath) ?>/assets/app.js"></script></body></html>

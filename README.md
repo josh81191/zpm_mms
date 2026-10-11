@@ -125,3 +125,9 @@ The dashboard shows net monthly party change for the past 12 months across all M
     C:\xampp\php\php.exe scripts\seed-party-movement.php
 
 The script is idempotent and development-only.
+
+## Families
+
+An individual can be tied to a family head (another registered individual) from the register form. Only one level is allowed: a head has no head of their own, and a head with linked members cannot be archived or tied to another head. Rules are enforced in the application and by a database trigger (migration 005). Demo families:
+
+    C:\xampp\php\php.exe scripts\seed-demo-families.php

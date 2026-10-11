@@ -40,8 +40,23 @@
           <p class="stat-label">Active units</p>
           <p class="stat-value"><?php echo number_format((int) $stats['active_units']) ?></p>
         </article>
+        <article class="stat-card">
+          <p class="stat-label">Families (with a head)</p>
+          <p class="stat-value"><?php echo number_format($familyStats['families']) ?></p>
+          <p class="muted"><?php echo number_format($familyStats['linked']) ?> linked members</p>
+        </article>
       </section>
       <?php require __DIR__ . '/partials/breakdown.php'; ?>
+      <section class="content-card">
+        <h2>Registered individuals per party — past 12 months, all Mizoram</h2>
+        <p class="muted">Total individuals in each party at the end of each month, derived from today's register and the recorded party changes. Demo data is synthetic.</p>
+        <div class="chart-box"><canvas id="party-population-chart" role="img" aria-label="Total individuals per party over the past 12 months" data-chart="<?php echo htmlspecialchars(json_encode($partyMovement, JSON_THROW_ON_ERROR), ENT_QUOTES, 'UTF-8') ?>"></canvas></div>
+        <details><summary>View figures as a table</summary>
+          <div class="table-wrap"><table><thead><tr><th>Month</th><?php foreach (array_keys($partyMovement['population']) as $p): ?><th><?php echo htmlspecialchars(strtoupper($p), ENT_QUOTES, 'UTF-8') ?></th><?php endforeach; ?></tr></thead><tbody>
+          <?php foreach ($partyMovement['labels'] as $i => $label): ?><tr><td><?php echo htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?></td><?php foreach ($partyMovement['population'] as $pop): ?><td><?php echo number_format((int) $pop[$i]) ?></td><?php endforeach; ?></tr><?php endforeach; ?>
+          </tbody></table></div>
+        </details>
+      </section>
       <section class="content-card">
         <h2>Party migration — past 12 months, all Mizoram</h2>
         <p class="muted">Net monthly change per party: individuals who moved to the party minus those who moved away. <?php echo number_format((int) $partyMovement['total']) ?> recorded party changes in the period. Demo data is synthetic.</p>

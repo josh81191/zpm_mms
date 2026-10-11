@@ -66,13 +66,18 @@ final class Application
 
             if ($method === 'GET' && $path === '/dashboard') {
                 $this->requirePermission('dashboard.view');
-                $this->view->render('dashboard', $this->pageData($this->reportData($_GET) + ['partyMovement' => $this->partyMovement()]));
+                $this->view->render('dashboard', $this->pageData($this->reportData($_GET) + ['partyMovement' => $this->partyMovement(), 'familyStats' => $this->familyStats()]));
                 return;
             }
 
             if ($method === 'GET' && $path === '/reports') {
                 $this->requirePermission('reports.view');
                 $this->view->render('reports', $this->pageData($this->reportData($_GET)));
+                return;
+            }
+
+            if ($method === 'POST' && $path === '/reports/ask') {
+                $this->askReport();
                 return;
             }
 
@@ -95,6 +100,12 @@ final class Application
             if ($method === 'GET' && $path === '/individuals') {
                 $this->requirePermission('members.view');
                 $this->view->render('individuals', $this->pageData($this->memberList($_GET)));
+                return;
+            }
+
+            if ($method === 'GET' && $path === '/individuals/heads') {
+                $this->requirePermission('members.manage');
+                $this->familyHeadSearch($_GET);
                 return;
             }
 
@@ -218,7 +229,94 @@ final class Application
             $series[$row['party']]['net'][] = (int) $row['joined'] - (int) $row['left_party'];
         }
         $total = array_sum(array_map('array_sum', array_column($series, 'joined')));
-        return ['labels' => $labels, 'series' => $series, 'total' => $total];
+        // Population is reconstructed backwards from today's counts using the recorded net changes.
+        $current = $this->database->connection()->query("SELECT party, count(*) AS c FROM members GROUP BY party")->fetchAll(\PDO::FETCH_KEY_PAIR);
+        $population = [];
+        foreach (self::PARTIES as $party) {
+            $running = (int) ($current[$party] ?? 0);
+            $points = [];
+            for ($i = count($labels) - 1; $i >= 0; $i--) {
+                $points[$i] = $running;
+                $running -= $series[$party]['net'][$i];
+            }
+            ksort($points);
+            $population[$party] = array_values($points);
+        }
+        return ['labels' => $labels, 'series' => $series, 'population' => $population, 'total' => $total];
+    }
+
+    private function askReport(): void
+    {
+        $respond = static function (int $status, array $body): void {
+            http_response_code($status);
+            header('Content-Type: application/json; charset=utf-8');
+            header('Cache-Control: no-store');
+            echo json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        };
+
+        if ($this->auth->user() === null) {
+            $respond(401, ['ok' => false, 'error' => 'Your session has expired. Please sign in again.']);
+            return;
+        }
+        if (!$this->auth->can('reports.view')) {
+            $respond(403, ['ok' => false, 'error' => 'You do not have permission to run analysis.']);
+            return;
+        }
+        if (!hash_equals($_SESSION['_csrf'] ?? '', (string) ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? ''))) {
+            $respond(419, ['ok' => false, 'error' => 'Your session has expired. Please reload the page.']);
+            return;
+        }
+
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        $question = is_array($payload) && is_string($payload['question'] ?? null) ? $payload['question'] : '';
+        $question = trim(preg_replace('/\s+/u', ' ', $question) ?? '');
+        if ($question === '' || mb_strlen($question) > 300) {
+            $respond(422, ['ok' => false, 'error' => 'Please type a question of up to 300 characters.']);
+            return;
+        }
+        $aiConfig = $this->config['ai'] ?? [];
+        if (!AiPlanner::enabled($aiConfig)) {
+            $respond(503, ['ok' => false, 'error' => 'AI analysis is not enabled. Ask the system administrator to configure the AI service.']);
+            return;
+        }
+        if (preg_match('/\b(epci|phone|mobile|address|email|names? of|full names?)\b/i', $question) === 1) {
+            $respond(422, ['ok' => false, 'error' => 'This tool answers aggregate questions only. It does not list or look up individual people or personal identifiers.']);
+            return;
+        }
+
+        try {
+            $engine = new QueryEngine($this->database->connection());
+            $ai = new AiPlanner($aiConfig);
+            $result = $engine->answer($question, $ai->plan($question, $engine->planningGuide()));
+            try {
+                $result['summary'] = $ai->narrate($question, $result);
+            } catch (RuntimeException) {
+                $result['summary'] = QueryEngine::plainSummary($result);
+                $result['notes'][] = 'The AI could not write the narrative, so a basic summary is shown.';
+            }
+        } catch (RuntimeException $exception) {
+            $message = $exception->getMessage();
+            $respond($message === AiPlanner::UNAVAILABLE ? 503 : 422, ['ok' => false, 'error' => $message === AiPlanner::UNUSABLE ? 'The AI could not interpret that question. Please rephrase it.' : $message, 'examples' => QueryEngine::EXAMPLES]);
+            return;
+        } catch (Throwable $exception) {
+            error_log($exception->getMessage());
+            $respond(500, ['ok' => false, 'error' => 'The analysis could not be completed. Please try rephrasing the question.']);
+            return;
+        }
+
+        $audit = $this->database->connection()->prepare(
+            'INSERT INTO audit_logs (actor_user_id, action_key, entity_type, entity_id, request_ip, metadata)
+             VALUES (:actor, :action, :entity, NULL, CAST(:ip AS INET), CAST(:metadata AS JSONB))'
+        );
+        $audit->execute([
+            'actor' => $this->auth->user()['id'],
+            'action' => 'reports.ask',
+            'entity' => 'report_query',
+            'ip' => $_SERVER['REMOTE_ADDR'] ?? null,
+            'metadata' => json_encode(['question' => mb_substr($question, 0, 300), 'interpretation' => $result['interpretation']], JSON_UNESCAPED_UNICODE),
+        ]);
+
+        $respond(200, ['ok' => true] + $result);
     }
 
     private function dashboardStats(array $input): array
@@ -453,6 +551,14 @@ final class Application
             $where[] = 'm.classification = :classification';
             $parameters['classification'] = $classification;
         }
+        $family = in_array(($input['family'] ?? ''), ['heads', 'members', 'none'], true) ? (string) $input['family'] : '';
+        if ($family === 'heads') {
+            $where[] = 'EXISTS (SELECT 1 FROM members f WHERE f.family_head_id = m.id)';
+        } elseif ($family === 'members') {
+            $where[] = 'm.family_head_id IS NOT NULL';
+        } elseif ($family === 'none') {
+            $where[] = 'm.family_head_id IS NULL AND NOT EXISTS (SELECT 1 FROM members f WHERE f.family_head_id = m.id)';
+        }
         $page = max(1, (int) ($input['page'] ?? 1));
         $perPage = 25;
         $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
@@ -463,9 +569,12 @@ final class Application
         $total = (int) $count->fetchColumn();
         $statement = $this->database->connection()->prepare(
             "SELECT m.id, m.member_code, m.full_name, m.gender, m.enrollment_date,
-                    m.membership_status, m.party, m.other_party_name, m.classification,
+                    m.membership_status, m.party, m.other_party_name, m.classification, m.family_head_id,
+                    h.full_name AS head_name,
+                    (SELECT count(*) FROM members f WHERE f.family_head_id = m.id) AS family_size,
                     d.name AS district_name, b.name AS block_name, u.name AS unit_name
              FROM members m
+             LEFT JOIN members h ON h.id = m.family_head_id
              INNER JOIN units u ON u.id = m.current_unit_id
              INNER JOIN blocks b ON b.id = u.block_id
              INNER JOIN districts d ON d.id = b.district_id
@@ -481,7 +590,7 @@ final class Application
         $statement->execute();
         return [
             'memberRows' => $statement->fetchAll(),
-            'memberFilters' => ['q' => $search, 'status' => $status, 'party' => $party, 'classification' => $classification, 'page' => $page],
+            'memberFilters' => ['q' => $search, 'status' => $status, 'party' => $party, 'classification' => $classification, 'family' => $family, 'page' => $page],
             'memberTotal' => $total,
             'memberPages' => max(1, (int) ceil($total / $perPage)),
         ];
@@ -498,14 +607,89 @@ final class Application
                 throw new RuntimeException('The member record was not found.');
             }
         }
+        $familyHead = null;
+        $familyMembers = [];
+        if ($member !== null) {
+            $connection = $this->database->connection();
+            if ($member['family_head_id'] !== null) {
+                $head = $connection->prepare('SELECT id, member_code, full_name FROM members WHERE id = :id');
+                $head->execute(['id' => $member['family_head_id']]);
+                $familyHead = $head->fetch() ?: null;
+            }
+            $dependents = $connection->prepare('SELECT id, member_code, full_name, membership_status FROM members WHERE family_head_id = :id ORDER BY full_name');
+            $dependents->execute(['id' => $member['id']]);
+            $familyMembers = $dependents->fetchAll();
+        }
         return [
             'member' => $member,
+            'familyHead' => $familyHead,
+            'familyMembers' => $familyMembers,
             'unitOptions' => $this->database->connection()->query(
                 "SELECT u.id, u.name AS unit_name, b.name AS block_name, d.name AS district_name
                  FROM units u INNER JOIN blocks b ON b.id = u.block_id INNER JOIN districts d ON d.id = b.district_id
                  WHERE u.administrative_status = 'active' ORDER BY d.name, b.name, u.name"
             )->fetchAll(),
         ];
+    }
+
+    private function familyStats(): array
+    {
+        $row = $this->database->connection()->query(
+            "SELECT count(DISTINCT family_head_id) AS families, count(*) AS linked FROM members WHERE family_head_id IS NOT NULL"
+        )->fetch();
+        return ['families' => (int) $row['families'], 'linked' => (int) $row['linked']];
+    }
+
+    private function familyHeadSearch(array $input): void
+    {
+        $search = trim((string) ($input['q'] ?? ''));
+        $exclude = (int) ($input['exclude'] ?? 0);
+        $unitId = (int) ($input['unit_id'] ?? 0);
+        $statement = $this->database->connection()->prepare(
+            "SELECT m.id, m.member_code, m.full_name, u.name AS unit_name
+             FROM members m INNER JOIN units u ON u.id = m.current_unit_id
+             WHERE m.family_head_id IS NULL AND m.membership_status <> 'archived' AND m.id <> :exclude
+               AND (m.full_name ILIKE :search OR m.member_code ILIKE :search)
+             ORDER BY (m.current_unit_id = :unit_id) DESC, m.full_name
+             LIMIT 15"
+        );
+        $statement->execute(['exclude' => $exclude, 'search' => '%' . $search . '%', 'unit_id' => $unitId]);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['results' => $statement->fetchAll()], JSON_THROW_ON_ERROR);
+    }
+
+    private function validateFamilyHead(\PDO $connection, ?int $memberId, ?int $headId, string $status): void
+    {
+        $dependents = 0;
+        if ($memberId !== null) {
+            $count = $connection->prepare('SELECT count(*) FROM members WHERE family_head_id = :id');
+            $count->execute(['id' => $memberId]);
+            $dependents = (int) $count->fetchColumn();
+        }
+        if ($dependents > 0 && $status === 'archived') {
+            throw new RuntimeException('This individual is the head of a family. Move the family members to another head before archiving.');
+        }
+        if ($headId === null) {
+            return;
+        }
+        if ($headId === $memberId) {
+            throw new RuntimeException('An individual cannot be their own family head.');
+        }
+        if ($dependents > 0) {
+            throw new RuntimeException('This individual is a family head with linked members and cannot be tied to another head.');
+        }
+        $head = $connection->prepare('SELECT family_head_id, membership_status FROM members WHERE id = :id');
+        $head->execute(['id' => $headId]);
+        $row = $head->fetch();
+        if ($row === false) {
+            throw new RuntimeException('The selected family head was not found.');
+        }
+        if ($row['family_head_id'] !== null) {
+            throw new RuntimeException('The selected family head is already a member of another family.');
+        }
+        if ($row['membership_status'] === 'archived') {
+            throw new RuntimeException('An archived individual cannot be a family head.');
+        }
     }
 
     private function saveMember(array $input): void
@@ -555,6 +739,8 @@ final class Application
                     throw new RuntimeException('The record was not found.');
                 }
             }
+            $headId = filter_var($input['family_head_id'] ?? null, FILTER_VALIDATE_INT) ?: null;
+            $this->validateFamilyHead($connection, $memberId, $headId, $status);
             $partyFields = [
                 'party' => $party,
                 'other_party_name' => $otherPartyName === '' ? null : $otherPartyName,
@@ -593,6 +779,10 @@ final class Application
                 $statement->execute();
                 $eventType = 'record-correction';
             }
+            $setHead = $connection->prepare('UPDATE members SET family_head_id = :head WHERE id = :id AND family_head_id IS DISTINCT FROM CAST(:head AS BIGINT)');
+            $setHead->bindValue(':head', $headId, $headId === null ? \PDO::PARAM_NULL : \PDO::PARAM_INT);
+            $setHead->bindValue(':id', $memberId, \PDO::PARAM_INT);
+            $setHead->execute();
             if ($previous === null || $previous['party'] !== $party || ($previous['classification'] ?? null) !== $partyFields['classification']) {
                 $history = $connection->prepare(
                     "INSERT INTO party_classification_history (member_id, previous_party, new_party, previous_classification, new_classification, note, recorded_by_user_id)
@@ -604,7 +794,7 @@ final class Application
                 "INSERT INTO membership_events (member_id, event_type, new_value, effective_date, recorded_by_user_id, reason)
                  VALUES (:member_id, :event_type, CAST(:new_value AS JSONB), CURRENT_DATE, :user_id, :reason)"
             );
-            $event->execute(['member_id' => $memberId, 'event_type' => $eventType, 'new_value' => json_encode(['status' => $status, 'unit_id' => $unitId, 'party' => $party, 'classification' => $partyFields['classification']], JSON_THROW_ON_ERROR), 'user_id' => $userId, 'reason' => 'Saved through the registered individuals register.']);
+            $event->execute(['member_id' => $memberId, 'event_type' => $eventType, 'new_value' => json_encode(['status' => $status, 'unit_id' => $unitId, 'party' => $party, 'classification' => $partyFields['classification'], 'family_head_id' => $headId], JSON_THROW_ON_ERROR), 'user_id' => $userId, 'reason' => 'Saved through the registered individuals register.']);
             $connection->commit();
         } catch (Throwable $exception) {
             $connection->rollBack();
@@ -614,6 +804,7 @@ final class Application
 
     private function archiveMember(int $memberId): void
     {
+        $this->validateFamilyHead($this->database->connection(), $memberId, null, 'archived');
         $statement = $this->database->connection()->prepare(
             "UPDATE members SET membership_status = 'archived', status_effective_date = CURRENT_DATE, updated_by_user_id = :user_id, updated_at = CURRENT_TIMESTAMP WHERE id = :id"
         );
