@@ -301,7 +301,7 @@ final class Application
             }
         } catch (RuntimeException $exception) {
             $message = $exception->getMessage();
-            $respond($message === AiPlanner::UNAVAILABLE ? 503 : 422, ['ok' => false, 'error' => $message === AiPlanner::UNUSABLE ? 'The AI could not interpret that question. Please rephrase it.' : $message, 'examples' => QueryEngine::EXAMPLES]);
+            $respond($message === AiPlanner::UNAVAILABLE ? 503 : 422, ['ok' => false, 'error' => $message === AiPlanner::UNUSABLE ? 'The AI could not interpret that question. Please rephrase it.' : $message, 'examples' => QueryEngine::EXAMPLES, 'debug' => AiPlanner::lastError()]);
             return;
         } catch (Throwable $exception) {
             error_log($exception->getMessage());

@@ -17,7 +17,12 @@ final class AiPlanner
     public const UNUSABLE = 'The AI service returned an unusable answer.';
 
     private array $config;
+    private static string $lastError = '';
 
+    public static function lastError(): string
+    {
+        return self::$lastError;
+    }
     public function __construct(array $config)
     {
         $this->config = $config;
@@ -106,7 +111,8 @@ final class AiPlanner
             $headers[] = 'Authorization: Bearer ' . $this->config['api_key'];
         }
         if (!function_exists('curl_init')) {
-            error_log('AI request failed: the PHP curl extension is not enabled.');
+            self::$lastError = 'The PHP curl extension is not enabled.';
+            error_log('AI request failed: ' . self::$lastError);
             throw new RuntimeException(self::UNAVAILABLE);
         }
         $handle = curl_init(rtrim($this->config['base_url'], '/') . '/chat/completions');
@@ -124,7 +130,8 @@ final class AiPlanner
         curl_close($handle);
 
         if (!is_string($response) || $status < 200 || $status >= 300) {
-            error_log('AI request failed with HTTP status ' . $status . ($curlError !== '' ? ' curl: ' . $curlError : '') . (is_string($response) ? ' body: ' . mb_substr($response, 0, 300) : ''));
+            self::$lastError = 'HTTP status ' . $status . ($curlError !== '' ? '; curl: ' . $curlError : '') . (is_string($response) ? '; response: ' . mb_substr($response, 0, 300) : '');
+            error_log('AI request failed with ' . self::$lastError);
             throw new RuntimeException(self::UNAVAILABLE);
         }
         $content = json_decode($response, true)['choices'][0]['message']['content'] ?? null;

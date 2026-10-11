@@ -77,6 +77,9 @@
         if (data.ok) {
           render(data);
         } else {
+          if (data.debug) {
+            console.error("AI analysis error:", data.debug);
+          }
           showError(data.error || "The analysis failed.");
         }
       })
