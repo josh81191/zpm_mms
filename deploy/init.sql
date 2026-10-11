@@ -2,11 +2,10 @@
 -- Run against an existing, empty database that you can write to:
 --   psql -U josh -d YOUR_DATABASE -f deploy/init.sql
 -- Re-running is safe: tables are only created when the schema is empty.
--- PostGIS must be available (the CREATE EXTENSION line needs the right to install it).
+-- PostGIS must already be installed in this database, in the public schema (public.geometry).
 
 \set ON_ERROR_STOP on
 
-CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA public;
 CREATE SCHEMA IF NOT EXISTS zpm_mms;
 SET search_path TO zpm_mms, public;
 
