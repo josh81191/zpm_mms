@@ -8,8 +8,11 @@ use PDO;
 
 final class Auth
 {
-    public function __construct(private Database $database)
+    private Database $database;
+
+    public function __construct(Database $database)
     {
+        $this->database = $database;
     }
 
     public function attempt(string $email, string $password): bool

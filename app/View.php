@@ -6,8 +6,11 @@ namespace Zpm;
 
 final class View
 {
-    public function __construct(private string $templatesPath)
+    private string $templatesPath;
+
+    public function __construct(string $templatesPath)
     {
+        $this->templatesPath = $templatesPath;
     }
 
     public function render(string $template, array $data = []): void

@@ -47,8 +47,11 @@ final class QueryEngine
         'How many women are registered, and where are they most concentrated?',
     ];
 
-    public function __construct(private PDO $connection)
+    private PDO $connection;
+
+    public function __construct(PDO $connection)
     {
+        $this->connection = $connection;
     }
 
     /** Schema description given to the AI planner. It contains no member data. */
@@ -440,12 +443,17 @@ final class QueryEngine
     private function valueLabel(string $dimension, ?string $value): string
     {
         $value = $value ?? '';
-        return match ($dimension) {
-            'party' => self::PARTY_LABELS[$value] ?? $value,
-            'classification' => self::CLASS_LABELS[$value] ?? $value,
-            'status', 'gender' => ucfirst($value),
-            default => $value,
-        };
+        switch ($dimension) {
+            case 'party':
+                return self::PARTY_LABELS[$value] ?? $value;
+            case 'classification':
+                return self::CLASS_LABELS[$value] ?? $value;
+            case 'status':
+            case 'gender':
+                return ucfirst($value);
+            default:
+                return $value;
+        }
     }
 
     private function present(string $question, array $dimensions, array $filters, ?array $period, array $rawRows, int $total, ?string $order, ?int $limit, bool $showTable): array

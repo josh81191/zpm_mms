@@ -16,8 +16,11 @@ final class AiPlanner
     public const UNAVAILABLE = 'The AI service is unavailable.';
     public const UNUSABLE = 'The AI service returned an unusable answer.';
 
-    public function __construct(private array $config)
+    private array $config;
+
+    public function __construct(array $config)
     {
+        $this->config = $config;
     }
 
     public static function enabled(array $config): bool

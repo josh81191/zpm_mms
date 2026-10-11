@@ -18,8 +18,13 @@ final class Application
     private Auth $auth;
     private View $view;
 
-    public function __construct(private array $config, private Database $database, string $templatesPath)
+    private array $config;
+    private Database $database;
+
+    public function __construct(array $config, Database $database, string $templatesPath)
     {
+        $this->config = $config;
+        $this->database = $database;
         date_default_timezone_set($config['timezone']);
         $this->auth = new Auth($database);
         $this->view = new View($templatesPath);
@@ -290,7 +295,7 @@ final class Application
             $result = $engine->answer($question, $ai->plan($question, $engine->planningGuide()));
             try {
                 $result['summary'] = $ai->narrate($question, $result);
-            } catch (RuntimeException) {
+            } catch (RuntimeException $ignored) {
                 $result['summary'] = QueryEngine::plainSummary($result);
                 $result['notes'][] = 'The AI could not write the narrative, so a basic summary is shown.';
             }
@@ -559,11 +564,8 @@ final class Application
         $unitId = is_int($unitId) && $unitId > 0 ? $unitId : null;
         foreach (['district_id' => $districtId, 'block_id' => $blockId, 'unit_id' => $unitId] as $filter => $id) {
             if ($id !== null) {
-                $where[] = match ($filter) {
-                    'district_id' => 'd.id = :' . $filter,
-                    'block_id' => 'b.id = :' . $filter,
-                    'unit_id' => 'u.id = :' . $filter,
-                };
+                $alias = ['district_id' => 'd', 'block_id' => 'b', 'unit_id' => 'u'][$filter];
+                $where[] = $alias . '.id = :' . $filter;
                 $parameters[$filter] = $id;
             }
         }

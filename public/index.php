@@ -14,6 +14,8 @@ if (!is_file($configPath)) {
     exit;
 }
 
+require $rootPath . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'polyfills.php';
+
 spl_autoload_register(static function (string $class) use ($rootPath): void {
     $prefix = 'Zpm\\';
     if (!str_starts_with($class, $prefix)) {
