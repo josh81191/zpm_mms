@@ -29,6 +29,14 @@ Use a dedicated PostgreSQL application account with only the database privileges
 
 6. Start Apache and open the configured local URL. Sign in with the administrator account you created.
 
+For a standalone VS Code preview without Apache, run this from the project directory:
+
+```powershell
+C:\xampp\php\php.exe -S 127.0.0.1:8097 scripts\dev-router.php
+```
+
+Then open `http://127.0.0.1:8097/6_ZPM_nunna_bu/public/login`.
+
 ## Operational demo routes
 
 - `/dashboard` — live organization summary
