@@ -1,6 +1,6 @@
 # ZPM Membership Management
 
-This repository contains the Phase 1 foundation for the ZPM Membership Management, Political Analysis, and GIS Decision Support System. It intentionally provides only the approved foundation: secure authentication, role-based authorization, migrations, audit-ready data structures, and a responsive application shell. Organizational records, member data, reports, and mapping begin in later phases.
+This repository contains a locally runnable development demo of the ZPM Membership Management, Political Analysis, and GIS Decision Support System. It includes secure authentication, role-based authorization, PostgreSQL/PostGIS migrations, organizational hierarchy, member register workflows, audit logging, reports and CSV export, and aggregate GIS visualization.
 
 ## Prerequisites
 
@@ -29,6 +29,15 @@ Use a dedicated PostgreSQL application account with only the database privileges
 
 6. Start Apache and open the configured local URL. Sign in with the administrator account you created.
 
+## Operational demo routes
+
+- `/dashboard` — live organization summary
+- `/members` — searchable, paginated member register with create, edit, and archive workflows
+- `/organization` — hierarchy register and unit creation
+- `/reports` — date/status/district filters, trends, quality checks, and CSV export
+- `/gis` — Leaflet map of aggregate unit reference points and member counts
+- `/audit` — authorized audit history
+
 ### Development demo accounts
 
 For local testing only, create four role-specific demo accounts:
@@ -46,9 +55,33 @@ The script runs only when `environment` is `development`, is idempotent, and mus
 | Data Entry Operator | `data.entry@zpm.test` | `ZpmDemo!2026Data` |
 | Read-Only User | `readonly@zpm.test` | `ZpmDemo!2026Read` |
 
+### Development organization and GIS demo data
+
+After creating the demo users, run the migration and seed a synthetic dataset:
+
+```powershell
+C:\xampp\php\php.exe scripts\migrate.php
+C:\xampp\php\php.exe scripts\seed-demo-data.php
+```
+
+The seed creates 11 Mizoram district reference locations, 22 clearly labelled demo organizational blocks, 55 named locality/village units, and 1,200 synthetic members with enrollment-event history. The member records are fictional and contain no EPCI data or political-affiliation data. Unit points are synthetic reference points for development-only GIS aggregation; they are not approved administrative boundaries or authoritative coordinates.
+
 ## Initial roles
 
 The migration creates and uses the dedicated `zpm_mms` PostgreSQL schema. Application tables and migration history are not created in `public`. The migration provides four proposed roles: `system-administrator`, `central-office`, `data-entry`, and `read-only`. Their server-side permissions are stored in `roles`, `permissions`, and `role_permissions`; links and visual controls are not relied upon for authorization.
+
+## Reporting milestone
+
+The current reporting milestone provides:
+
+- Filterable member totals by enrollment date, membership status, and district.
+- Active, inactive/departed, and recent-enrollment indicators.
+- District comparison tables and enrollment trend summaries.
+- Data-quality checks for empty units, active members in inactive units, missing EPCI values, and possible duplicate groups.
+- Authorized CSV member-register export.
+- An administrator-only audit-log view with login events.
+
+Reporting uses recorded member data only. It does not infer affiliation, classification, political preference, or geographic causation.
 
 ## Security notes
 

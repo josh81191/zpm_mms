@@ -5,5 +5,7 @@ document.addEventListener('submit', function (event) {
         submit.disabled = true;
         submit.textContent = 'Please wait...';
     }
+    if (form.dataset.confirm && !window.confirm(form.dataset.confirm)) {
+        event.preventDefault();
+    }
 });
-

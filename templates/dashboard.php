@@ -18,23 +18,36 @@
         </div>
     </header>
     <div class="layout">
-        <nav class="sidebar" aria-label="Primary navigation">
-            <a aria-current="page" href="<?= htmlspecialchars($basePath, ENT_QUOTES, 'UTF-8') ?>/dashboard">Dashboard</a>
-            <a href="#" aria-disabled="true">Members (Phase 3)</a>
-            <a href="#" aria-disabled="true">Organization (Phase 2)</a>
-            <a href="#" aria-disabled="true">Reports (Phase 4)</a>
-            <a href="#" aria-disabled="true">GIS &amp; Maps (Phase 5)</a>
-        </nav>
+        <?php require __DIR__ . '/partials/nav.php'; ?>
         <main class="main">
             <h1>Welcome, <?= htmlspecialchars($user['full_name'], ENT_QUOTES, 'UTF-8') ?></h1>
+            <section class="stat-grid" aria-label="Organization summary">
+                <article class="stat-card">
+                    <p class="stat-label">Recorded members</p>
+                    <p class="stat-value"><?= number_format((int) $stats['total_members']) ?></p>
+                </article>
+                <article class="stat-card">
+                    <p class="stat-label">Active members</p>
+                    <p class="stat-value"><?= number_format((int) $stats['active_members']) ?></p>
+                </article>
+                <article class="stat-card">
+                    <p class="stat-label">Active districts</p>
+                    <p class="stat-value"><?= number_format((int) $stats['active_districts']) ?></p>
+                </article>
+                <article class="stat-card">
+                    <p class="stat-label">Active units</p>
+                    <p class="stat-value"><?= number_format((int) $stats['active_units']) ?></p>
+                </article>
+            </section>
             <section class="content-card" aria-labelledby="foundation-title">
-                <h2 id="foundation-title">Foundation is ready</h2>
-                <p class="status">Authentication and role-based access control are active.</p>
-                <p>This initial release establishes the secure application shell. Membership, organization, reporting, and GIS functions will be added in their approved implementation phases.</p>
+                <h2 id="foundation-title">Operational demo is ready</h2>
+                <p class="status">Authentication, role-based access control, member management, reporting, and GIS aggregation are active.</p>
+                <p>This development build contains the complete demonstrable core workflow: secure access, organization hierarchy, member register, audit history, report exports, and aggregate GIS visualization.</p>
                 <ul class="phase-list">
                     <li>Secure sign-in, session handling, CSRF protection, and server-side permissions</li>
-                    <li>Auditable user accounts, roles, and permissions</li>
-                    <li>Migration-based PostgreSQL schema management</li>
+                    <li>Auditable user accounts, roles, permissions, member changes, and archive actions</li>
+                    <li>Searchable member register with create, edit, status, and organizational assignment workflows</li>
+                    <li>Migration-based PostgreSQL/PostGIS schema management</li>
                     <li>Responsive shared interface for future modules</li>
                 </ul>
             </section>
@@ -42,4 +55,3 @@
     </div>
 </body>
 </html>
-

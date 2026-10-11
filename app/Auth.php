@@ -37,6 +37,7 @@ final class Auth
         $_SESSION['_csrf'] = bin2hex(random_bytes(32));
 
         $this->recordLogin((int) $user['id']);
+        $this->recordAudit((int) $user['id'], 'auth.login', 'user_account', (string) $user['id']);
 
         return true;
     }
@@ -91,5 +92,20 @@ final class Auth
         );
         $statement->execute(['id' => $userId]);
     }
-}
 
+    private function recordAudit(int $userId, string $action, string $entityType, string $entityId): void
+    {
+        $statement = $this->database->connection()->prepare(
+            'INSERT INTO audit_logs (actor_user_id, action_key, entity_type, entity_id, request_ip, metadata)
+             VALUES (:actor_user_id, :action_key, :entity_type, :entity_id, CAST(:request_ip AS INET), CAST(:metadata AS JSONB))'
+        );
+        $statement->execute([
+            'actor_user_id' => $userId,
+            'action_key' => $action,
+            'entity_type' => $entityType,
+            'entity_id' => $entityId,
+            'request_ip' => $_SERVER['REMOTE_ADDR'] ?? null,
+            'metadata' => '{}',
+        ]);
+    }
+}
