@@ -25,7 +25,7 @@ return [
         // Requires explicit approval to send questions and aggregate counts to a third party.
         'enabled'  => false,
         'base_url' => 'https://api.groq.com/openai/v1',
-        'model'    => 'llama-3.1-8b-instant',
+        'model'    => 'llama-3.3-70b-versatile',
         'api_key'  => '',
         'timeout'  => 40,
     ],
