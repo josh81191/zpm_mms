@@ -105,6 +105,10 @@ final class AiPlanner
         if (($this->config['api_key'] ?? '') !== '') {
             $headers[] = 'Authorization: Bearer ' . $this->config['api_key'];
         }
+        if (!function_exists('curl_init')) {
+            error_log('AI request failed: the PHP curl extension is not enabled.');
+            throw new RuntimeException(self::UNAVAILABLE);
+        }
         $handle = curl_init(rtrim($this->config['base_url'], '/') . '/chat/completions');
         curl_setopt_array($handle, [
             CURLOPT_POST => true,
@@ -116,10 +120,11 @@ final class AiPlanner
         ]);
         $response = curl_exec($handle);
         $status = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+        $curlError = curl_error($handle);
         curl_close($handle);
 
         if (!is_string($response) || $status < 200 || $status >= 300) {
-            error_log('AI request failed with HTTP status ' . $status);
+            error_log('AI request failed with HTTP status ' . $status . ($curlError !== '' ? ' curl: ' . $curlError : '') . (is_string($response) ? ' body: ' . mb_substr($response, 0, 300) : ''));
             throw new RuntimeException(self::UNAVAILABLE);
         }
         $content = json_decode($response, true)['choices'][0]['message']['content'] ?? null;
