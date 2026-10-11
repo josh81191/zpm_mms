@@ -35,6 +35,68 @@
 })();
 
 (function () {
+    var district = document.getElementById('district_id');
+    var block = document.getElementById('block_id');
+    var unit = document.getElementById('unit_id');
+    if (!district || !block || !unit) {
+        return;
+    }
+
+    function updateOptions(select, parentValue, parentAttribute) {
+        Array.prototype.forEach.call(select.options, function (option) {
+            if (!option.dataset[parentAttribute]) {
+                return;
+            }
+            var matches = parentValue === '' || option.dataset[parentAttribute] === parentValue;
+            option.hidden = !matches;
+            option.disabled = !matches;
+            if (!matches && option.selected) {
+                select.value = '';
+            }
+        });
+    }
+
+    function updateUnitOptions() {
+        Array.prototype.forEach.call(unit.options, function (option) {
+            if (!option.dataset.blockId) {
+                return;
+            }
+            var matchesDistrict = district.value === '' || option.dataset.districtId === district.value;
+            var matchesBlock = block.value === '' || option.dataset.blockId === block.value;
+            var matches = matchesDistrict && matchesBlock;
+            option.hidden = !matches;
+            option.disabled = !matches;
+            if (!matches && option.selected) {
+                unit.value = '';
+            }
+        });
+    }
+
+    function syncLocationOptions() {
+        updateOptions(block, district.value, 'districtId');
+        updateUnitOptions();
+    }
+
+    if (district.value && block.selectedOptions[0] && block.selectedOptions[0].dataset.districtId !== district.value) {
+        block.value = '';
+    }
+    if (block.value && unit.selectedOptions[0] && unit.selectedOptions[0].dataset.blockId !== block.value) {
+        unit.value = '';
+    }
+    syncLocationOptions();
+
+    district.addEventListener('change', function () {
+        block.value = '';
+        unit.value = '';
+        syncLocationOptions();
+    });
+    block.addEventListener('change', function () {
+        unit.value = '';
+        syncLocationOptions();
+    });
+})();
+
+(function () {
     var party = document.getElementById('party');
     var classification = document.getElementById('classification');
     if (!party || !classification || !document.getElementById('classification-field')) {

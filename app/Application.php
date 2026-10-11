@@ -551,6 +551,22 @@ final class Application
             $where[] = 'm.classification = :classification';
             $parameters['classification'] = $classification;
         }
+        $districtId = filter_var($input['district_id'] ?? null, FILTER_VALIDATE_INT);
+        $districtId = is_int($districtId) && $districtId > 0 ? $districtId : null;
+        $blockId = filter_var($input['block_id'] ?? null, FILTER_VALIDATE_INT);
+        $blockId = is_int($blockId) && $blockId > 0 ? $blockId : null;
+        $unitId = filter_var($input['unit_id'] ?? null, FILTER_VALIDATE_INT);
+        $unitId = is_int($unitId) && $unitId > 0 ? $unitId : null;
+        foreach (['district_id' => $districtId, 'block_id' => $blockId, 'unit_id' => $unitId] as $filter => $id) {
+            if ($id !== null) {
+                $where[] = match ($filter) {
+                    'district_id' => 'd.id = :' . $filter,
+                    'block_id' => 'b.id = :' . $filter,
+                    'unit_id' => 'u.id = :' . $filter,
+                };
+                $parameters[$filter] = $id;
+            }
+        }
         $family = in_array(($input['family'] ?? ''), ['heads', 'members', 'none'], true) ? (string) $input['family'] : '';
         if ($family === 'heads') {
             $where[] = 'EXISTS (SELECT 1 FROM members f WHERE f.family_head_id = m.id)';
@@ -563,7 +579,12 @@ final class Application
         $perPage = 25;
         $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
         $count = $this->database->connection()->prepare(
-            "SELECT count(*) FROM members m {$whereSql}"
+            "SELECT count(*)
+             FROM members m
+             INNER JOIN units u ON u.id = m.current_unit_id
+             INNER JOIN blocks b ON b.id = u.block_id
+             INNER JOIN districts d ON d.id = b.district_id
+             {$whereSql}"
         );
         $count->execute($parameters);
         $total = (int) $count->fetchColumn();
@@ -590,9 +611,25 @@ final class Application
         $statement->execute();
         return [
             'memberRows' => $statement->fetchAll(),
-            'memberFilters' => ['q' => $search, 'status' => $status, 'party' => $party, 'classification' => $classification, 'family' => $family, 'page' => $page],
+            'memberFilters' => ['q' => $search, 'status' => $status, 'party' => $party, 'classification' => $classification, 'family' => $family, 'district_id' => $districtId, 'block_id' => $blockId, 'unit_id' => $unitId, 'page' => $page],
             'memberTotal' => $total,
             'memberPages' => max(1, (int) ceil($total / $perPage)),
+            'districtOptions' => $this->database->connection()->query(
+                'SELECT id, name FROM districts ORDER BY name'
+            )->fetchAll(),
+            'blockOptions' => $this->database->connection()->query(
+                'SELECT b.id, b.name, b.district_id, d.name AS district_name
+                 FROM blocks b
+                 INNER JOIN districts d ON d.id = b.district_id
+                 ORDER BY d.name, b.name'
+            )->fetchAll(),
+            'unitOptions' => $this->database->connection()->query(
+                'SELECT u.id, u.name, u.block_id, b.name AS block_name, d.id AS district_id, d.name AS district_name
+                 FROM units u
+                 INNER JOIN blocks b ON b.id = u.block_id
+                 INNER JOIN districts d ON d.id = b.district_id
+                 ORDER BY d.name, b.name, u.name'
+            )->fetchAll(),
         ];
     }
 
