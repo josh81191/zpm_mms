@@ -1,7 +1,8 @@
 -- ZPM Member Registry - database initialisation (migrations 001-005 included).
 -- Run against an existing, empty database that you can write to:
 --   psql -U josh -d YOUR_DATABASE -f deploy/init.sql
--- Re-running is safe: tables are only created when the schema is empty.
+-- Run once against an empty database: the whole script is one transaction, so a failure changes nothing.
+-- Re-running on a database that already has the tables fails harmlessly ("relation already exists").
 -- PostGIS must already be installed in this database, in the public schema (public.geometry).
 
 \set ON_ERROR_STOP on
@@ -14,8 +15,6 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
     applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-SELECT to_regclass('zpm_mms.roles') IS NULL AS fresh \gset
-\if :fresh
 BEGIN;
 
 -- ============================================================ 001 foundation
@@ -309,6 +308,3 @@ INSERT INTO schema_migrations (filename) VALUES
 ON CONFLICT DO NOTHING;
 
 COMMIT;
-\else
-\echo 'Schema zpm_mms already exists - skipping table creation.'
-\endif
