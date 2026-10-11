@@ -102,6 +102,11 @@ final class AiPlanner
             'max_tokens' => $json ? 600 : 500,
             'messages' => [['role' => 'system', 'content' => $system], ['role' => 'user', 'content' => $user]],
         ];
+        if (stripos((string) $this->config['model'], 'gpt-oss') !== false) {
+            $body['reasoning_effort'] = 'low';
+            unset($body['max_tokens']);
+            $body['max_completion_tokens'] = 2000;
+        }
         if ($json) {
             $body['response_format'] = ['type' => 'json_object'];
         }
