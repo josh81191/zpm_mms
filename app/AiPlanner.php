@@ -29,13 +29,21 @@ final class AiPlanner
     {
         $system = 'You convert a question about a political party membership register into a JSON query plan. '
             . 'You never see data. Reply with ONE JSON object only, with keys: '
-            . '"group_by" (array), "filters" (object), "period" ({"from":"YYYY-MM-DD","to":"YYYY-MM-DD"} inclusive, on registration date, or null), '
+            . '"group_by" (array), "filters" (object), "measure" ("individuals","party_flow","party_moves" or "unit_attention"), "period" ({"from":"YYYY-MM-DD","to":"YYYY-MM-DD"} inclusive, on registration date (or on the date a change was recorded for party_flow/party_moves), or null), '
             . '"order" ("asc","desc" or null), "limit" (integer or null), '
             . '"show_table" (true only when the answer has many figures that a table presents much better than a sentence, otherwise false), '
             . '"refused" (string or null). '
-            . 'Today is ' . date('Y-m-d') . '. If the question asks for personal details of individuals (names, EPCI numbers, contact details), '
+            . 'Today is ' . date('Y-m-d') . '. Add a filter ONLY when the question explicitly names it (never add status, classification or party filters on your own); "all parties" or no party mentioned means no party filter. '
+            . 'A party named in a question about where people moved FROM or TO is the filter, e.g. "where did MNF members go" gives filters.party ["mnf"]. '
+            . 'If the question asks for personal details of individuals (names, EPCI numbers, contact details), '
             . "asks to predict or score individuals' political leanings or persuasion, or cannot be answered with counts, "
-            . 'set "refused" to a short explanation and leave the rest empty. Use only the vocabulary below.' . "\n\n" . $guide;
+            . 'set "refused" to a short explanation and leave the rest empty. Use only the vocabulary below.' . "\n\n"
+            . "Examples (question => plan):\n"
+            . '"Which units need attention in the next campaign for ZPM?" => {"measure":"unit_attention","group_by":[],"filters":{"party":["zpm"]},"limit":5,"show_table":true}' . "\n"
+            . '"Which 5 units in Aizawl need support for ZPM?" => {"measure":"unit_attention","group_by":[],"filters":{"party":["zpm"],"district":["Aizawl"]},"limit":5,"show_table":true}' . "\n"
+            . '"How many members does each party have?" => {"measure":"individuals","group_by":["party"],"filters":{}}' . "\n"
+            . '"Party migration in the last 12 months" => {"measure":"party_flow","group_by":[],"filters":{}}' . "\n"
+            . '"Where did Congress members go?" => {"measure":"party_moves","group_by":[],"filters":{"party":["congress"]}}' . "\n\n" . $guide;
 
         $content = trim((string) preg_replace('/^```(?:json)?|```$/m', '', $this->chat($system, $question, true)));
         $plan = json_decode($content, true);
@@ -52,11 +60,20 @@ final class AiPlanner
             'matching_total' => $result['total'],
             'scope' => $result['scope'],
             'interpretation' => $result['interpretation'],
-            'figures' => array_map(static fn (array $r): array => ['group' => implode(' / ', $r['labels']), 'individuals' => $r['n'], 'percent_of_matching' => $r['pct']], $result['rows']),
+            'figures' => array_map(static function (array $r) use ($result): array {
+                if (isset($r['reasons'])) {
+                    return ['unit' => $r['labels'][0], 'attention_score' => $r['cells'][0], 'reasons' => $r['reasons']];
+                }
+                if (isset($r['cells'])) {
+                    return ['group' => implode(' / ', $r['labels']), 'values' => array_combine(array_slice($result['columns'], count($r['labels'])), $r['cells'])];
+                }
+                return ['group' => implode(' / ', $r['labels']), 'individuals' => $r['n'], 'percent_of_matching' => $r['pct']];
+            }, $result['rows']),
             'notes' => $result['notes'],
         ];
         $system = "You write short answers for the office of a political party's general secretary. "
-            . 'Answer the question in plain English using ONLY the figures provided: 2 to 5 sentences, no markdown, no tables, no invented numbers. '
+            . 'Answer the question in plain English using ONLY the figures provided: 2 to 5 sentences in one paragraph, no bullet points, no markdown, no tables, no invented numbers; copy numbers exactly as given. '
+            . 'If the figures are units ranked by an attention score, name the top three units and state each one\'s "reasons" text as given, without adding other reasons or numbers, and mention that the score is an administrative indicator. '
             . 'State the key numbers, notable highest/lowest values or trends, and any caveat from the notes. '
             . 'Describe association only, never causation. Do not speculate about individuals. '
             . 'If there are no figures, say no matching records were found.';

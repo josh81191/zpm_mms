@@ -24,7 +24,7 @@
   }
 
   function cells(row) {
-    return row.labels.concat([row.n === null ? "<5" : row.n.toLocaleString(), row.pct === null ? "—" : row.pct + "%"]);
+    return row.labels.concat(row.cells ? row.cells : [row.n === null ? "<5" : row.n.toLocaleString(), row.pct === null ? "—" : row.pct + "%"]);
   }
 
   function render(data) {
