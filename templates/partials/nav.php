@@ -13,7 +13,7 @@ $isCurrent = static function (string $section) use ($currentPath): bool {
 <nav class="sidebar" aria-label="Primary navigation">
     <p class="nav-label">Workspace</p>
     <?php if ($permissions['dashboard.view'] ?? false): ?><a <?= $isCurrent('/dashboard') ? 'aria-current="page"' : '' ?> href="<?= htmlspecialchars($basePath, ENT_QUOTES, 'UTF-8') ?>/dashboard">Dashboard</a><?php endif; ?>
-    <?php if ($permissions['members.view'] ?? false): ?><a <?= $isCurrent('/members') ? 'aria-current="page"' : '' ?> href="<?= htmlspecialchars($basePath, ENT_QUOTES, 'UTF-8') ?>/members">Members</a><?php endif; ?>
+    <?php if ($permissions['members.view'] ?? false): ?><a <?= $isCurrent('/individuals') ? 'aria-current="page"' : '' ?> href="<?= htmlspecialchars($basePath, ENT_QUOTES, 'UTF-8') ?>/individuals">Registered individuals</a><?php endif; ?>
     <?php if ($permissions['organization.manage'] ?? false): ?><a <?= $isCurrent('/organization') ? 'aria-current="page"' : '' ?> href="<?= htmlspecialchars($basePath, ENT_QUOTES, 'UTF-8') ?>/organization">Organization</a><?php endif; ?>
     <p class="nav-label">Insights</p>
     <?php if ($permissions['reports.view'] ?? false): ?><a <?= $isCurrent('/reports') ? 'aria-current="page"' : '' ?> href="<?= htmlspecialchars($basePath, ENT_QUOTES, 'UTF-8') ?>/reports">Analysis &amp; Reports</a><?php endif; ?>

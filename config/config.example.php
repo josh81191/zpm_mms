@@ -3,7 +3,7 @@
 declare (strict_types = 1);
 
 return [
-    'app_name'     => 'ZPM Membership Management',
+    'app_name'     => 'ZPM Registry & GIS',
     'environment'  => 'development',
     'base_path'    => '/6_ZPM_nunna_bu/public',
     'timezone'     => 'Asia/Kolkata',

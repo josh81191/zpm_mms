@@ -4,11 +4,17 @@ declare(strict_types=1);
 
 namespace Zpm;
 
+use DateTimeImmutable;
 use RuntimeException;
 use Throwable;
 
 final class Application
 {
+    private const PARTIES = ['zpm', 'mnf', 'congress', 'bjp', 'other'];
+    private const CLASSIFICATIONS = ['green', 'yellow', 'red'];
+    // Classification breakdowns are hidden on maps when a unit has fewer non-ZPM individuals than this.
+    private const MAP_DISCLOSURE_THRESHOLD = 5;
+
     private Auth $auth;
     private View $view;
 
@@ -60,7 +66,7 @@ final class Application
 
             if ($method === 'GET' && $path === '/dashboard') {
                 $this->requirePermission('dashboard.view');
-                $this->view->render('dashboard', $this->pageData(['stats' => $this->dashboardStats($_GET)]));
+                $this->view->render('dashboard', $this->pageData($this->reportData($_GET)));
                 return;
             }
 
@@ -83,35 +89,39 @@ final class Application
             }
 
             if ($method === 'GET' && $path === '/members') {
+                $this->redirect('/individuals');
+            }
+
+            if ($method === 'GET' && $path === '/individuals') {
                 $this->requirePermission('members.view');
-                $this->view->render('members', $this->pageData($this->memberList($_GET)));
+                $this->view->render('individuals', $this->pageData($this->memberList($_GET)));
                 return;
             }
 
-            if ($method === 'GET' && $path === '/members/new') {
+            if ($method === 'GET' && $path === '/individuals/new') {
                 $this->requirePermission('members.manage');
-                $this->view->render('member-form', $this->pageData($this->memberFormData()));
+                $this->view->render('individual-form', $this->pageData($this->memberFormData()));
                 return;
             }
 
-            if ($method === 'POST' && $path === '/members') {
+            if ($method === 'POST' && $path === '/individuals') {
                 $this->requirePermission('members.manage');
                 Csrf::verify($_POST['_csrf'] ?? null);
                 $this->saveMember($_POST);
-                $this->redirect('/members');
+                $this->redirect('/individuals');
             }
 
-            if ($method === 'GET' && preg_match('#^/members/([0-9]+)/edit$#', $path, $matches) === 1) {
+            if ($method === 'GET' && preg_match('#^/individuals/([0-9]+)/edit$#', $path, $matches) === 1) {
                 $this->requirePermission('members.manage');
-                $this->view->render('member-form', $this->pageData($this->memberFormData((int) $matches[1])));
+                $this->view->render('individual-form', $this->pageData($this->memberFormData((int) $matches[1])));
                 return;
             }
 
-            if ($method === 'POST' && preg_match('#^/members/([0-9]+)/archive$#', $path, $matches) === 1) {
+            if ($method === 'POST' && preg_match('#^/individuals/([0-9]+)/archive$#', $path, $matches) === 1) {
                 $this->requirePermission('members.manage');
                 Csrf::verify($_POST['_csrf'] ?? null);
                 $this->archiveMember((int) $matches[1]);
-                $this->redirect('/members');
+                $this->redirect('/individuals');
             }
 
             if ($method === 'GET' && $path === '/organization') {
@@ -219,6 +229,36 @@ final class Application
         );
         $districts->execute($parameters);
 
+        $partyStatement = $connection->prepare(
+            "SELECT m.party, count(*) AS individual_count
+             FROM members m
+             INNER JOIN units u ON u.id = m.current_unit_id
+             INNER JOIN blocks b ON b.id = u.block_id
+             INNER JOIN districts d ON d.id = b.district_id
+             {$where}
+             GROUP BY m.party"
+        );
+        $partyStatement->execute($parameters);
+        $partyCounts = array_fill_keys(self::PARTIES, 0);
+        foreach ($partyStatement->fetchAll() as $row) {
+            $partyCounts[$row['party']] = (int) $row['individual_count'];
+        }
+
+        $classStatement = $connection->prepare(
+            "SELECT m.classification, count(*) AS individual_count
+             FROM members m
+             INNER JOIN units u ON u.id = m.current_unit_id
+             INNER JOIN blocks b ON b.id = u.block_id
+             INNER JOIN districts d ON d.id = b.district_id
+             " . ($where === '' ? 'WHERE' : $where . ' AND') . " m.classification IS NOT NULL
+             GROUP BY m.classification"
+        );
+        $classStatement->execute($parameters);
+        $classificationCounts = array_fill_keys(self::CLASSIFICATIONS, 0);
+        foreach ($classStatement->fetchAll() as $row) {
+            $classificationCounts[$row['classification']] = (int) $row['individual_count'];
+        }
+
         $trend = $connection->prepare(
             "SELECT to_char(date_trunc('month', m.enrollment_date), 'YYYY-MM') AS month,
                     count(*) AS member_count
@@ -257,6 +297,8 @@ final class Application
         return [
             'stats' => $stats,
             'districtRows' => $districts->fetchAll(),
+            'partyCounts' => $partyCounts,
+            'classificationCounts' => $classificationCounts,
             'trendRows' => $trend->fetchAll(),
             'quality' => $quality ?: [],
             'filters' => $filters,
@@ -273,7 +315,18 @@ final class Application
             'date_to' => trim((string) ($input['date_to'] ?? '')),
             'district_id' => filter_var($input['district_id'] ?? null, FILTER_VALIDATE_INT) ?: null,
             'status' => in_array(($input['status'] ?? ''), ['active', 'inactive', 'resigned', 'deceased', 'archived'], true) ? $input['status'] : '',
+            'party' => in_array(($input['party'] ?? ''), self::PARTIES, true) ? $input['party'] : '',
+            'classification' => in_array(($input['classification'] ?? ''), self::CLASSIFICATIONS, true) ? $input['classification'] : '',
         ];
+
+        if ($filters['party'] !== '') {
+            $where[] = 'm.party = :party';
+            $parameters['party'] = $filters['party'];
+        }
+        if ($filters['classification'] !== '') {
+            $where[] = 'm.classification = :classification';
+            $parameters['classification'] = $filters['classification'];
+        }
 
         if ($filters['date_from'] !== '') {
             $where[] = 'm.enrollment_date >= :date_from';
@@ -306,7 +359,9 @@ final class Application
         [$where, $parameters] = $this->memberFilters($input);
         $statement = $this->database->connection()->prepare(
             "SELECT m.member_code, m.full_name, m.gender, m.enrollment_date,
-                    m.membership_status, d.name AS district_name, b.name AS block_name, u.name AS unit_name
+                    m.membership_status, CASE m.party WHEN 'zpm' THEN 'ZPM' WHEN 'mnf' THEN 'MNF' WHEN 'congress' THEN 'Congress' WHEN 'bjp' THEN 'BJP' ELSE COALESCE(m.other_party_name, 'Other') END AS party,
+                    COALESCE(initcap(m.classification), '') AS classification,
+                    d.name AS district_name, b.name AS block_name, u.name AS unit_name
              FROM members m
              INNER JOIN units u ON u.id = m.current_unit_id
              INNER JOIN blocks b ON b.id = u.block_id
@@ -316,12 +371,12 @@ final class Application
         );
         $statement->execute($parameters);
         header('Content-Type: text/csv; charset=utf-8');
-        header('Content-Disposition: attachment; filename="zpm-member-report-' . date('Y-m-d') . '.csv"');
+        header('Content-Disposition: attachment; filename="zpm-registered-individuals-' . date('Y-m-d') . '.csv"');
         $output = fopen('php://output', 'wb');
         if ($output === false) {
             throw new RuntimeException('The report export could not be created.');
         }
-        fputcsv($output, ['Member code', 'Full name', 'Gender', 'Enrollment date', 'Status', 'District', 'Block', 'Unit']);
+        fputcsv($output, ['Record code', 'Full name', 'Gender', 'Registration date', 'Status', 'Party', 'Classification', 'District', 'Block', 'Unit']);
         while ($row = $statement->fetch()) {
             fputcsv($output, $row);
         }
@@ -354,6 +409,16 @@ final class Application
             $where[] = 'm.membership_status = :status';
             $parameters['status'] = $status;
         }
+        $party = in_array(($input['party'] ?? ''), self::PARTIES, true) ? (string) $input['party'] : '';
+        $classification = in_array(($input['classification'] ?? ''), self::CLASSIFICATIONS, true) ? (string) $input['classification'] : '';
+        if ($party !== '') {
+            $where[] = 'm.party = :party';
+            $parameters['party'] = $party;
+        }
+        if ($classification !== '') {
+            $where[] = 'm.classification = :classification';
+            $parameters['classification'] = $classification;
+        }
         $page = max(1, (int) ($input['page'] ?? 1));
         $perPage = 25;
         $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
@@ -364,7 +429,8 @@ final class Application
         $total = (int) $count->fetchColumn();
         $statement = $this->database->connection()->prepare(
             "SELECT m.id, m.member_code, m.full_name, m.gender, m.enrollment_date,
-                    m.membership_status, d.name AS district_name, b.name AS block_name, u.name AS unit_name
+                    m.membership_status, m.party, m.other_party_name, m.classification,
+                    d.name AS district_name, b.name AS block_name, u.name AS unit_name
              FROM members m
              INNER JOIN units u ON u.id = m.current_unit_id
              INNER JOIN blocks b ON b.id = u.block_id
@@ -381,7 +447,7 @@ final class Application
         $statement->execute();
         return [
             'memberRows' => $statement->fetchAll(),
-            'memberFilters' => ['q' => $search, 'status' => $status, 'page' => $page],
+            'memberFilters' => ['q' => $search, 'status' => $status, 'party' => $party, 'classification' => $classification, 'page' => $page],
             'memberTotal' => $total,
             'memberPages' => max(1, (int) ceil($total / $perPage)),
         ];
@@ -423,33 +489,88 @@ final class Application
         if ($date === false || $date > new DateTimeImmutable('today')) {
             throw new RuntimeException('Enrollment date must be a valid date that is not in the future.');
         }
+        $party = (string) ($input['party'] ?? '');
+        $classification = (string) ($input['classification'] ?? '');
+        $otherPartyName = trim((string) ($input['other_party_name'] ?? ''));
+        $classificationNote = trim((string) ($input['classification_note'] ?? ''));
+        if (!in_array($party, self::PARTIES, true)) {
+            throw new RuntimeException('Please select a party.');
+        }
+        if ($party === 'zpm') {
+            $classification = '';
+        } elseif (!in_array($classification, self::CLASSIFICATIONS, true)) {
+            throw new RuntimeException('A Green, Yellow, or Red classification is required for individuals who are not ZPM.');
+        }
+        if ($party === 'other') {
+            if ($otherPartyName === '') {
+                throw new RuntimeException('Please enter the party name when "Other" is selected.');
+            }
+        } else {
+            $otherPartyName = '';
+        }
         $connection = $this->database->connection();
         $connection->beginTransaction();
         try {
+            $userId = $this->auth->user()['id'];
+            $previous = null;
+            if ($memberId !== null) {
+                $lookup = $connection->prepare('SELECT party, classification FROM members WHERE id = :id FOR UPDATE');
+                $lookup->execute(['id' => $memberId]);
+                $previous = $lookup->fetch();
+                if ($previous === false) {
+                    throw new RuntimeException('The record was not found.');
+                }
+            }
+            $partyFields = [
+                'party' => $party,
+                'other_party_name' => $otherPartyName === '' ? null : $otherPartyName,
+                'classification' => $classification === '' ? null : $classification,
+                'classification_note' => $classificationNote === '' ? null : $classificationNote,
+            ];
             if ($memberId === null) {
-                $code = 'M-' . strtoupper(bin2hex(random_bytes(5)));
+                $code = 'R-' . strtoupper(bin2hex(random_bytes(5)));
                 $statement = $connection->prepare(
-                    "INSERT INTO members (member_code, full_name, gender, enrollment_date, current_unit_id, membership_status, status_effective_date, remarks, created_by_user_id, updated_by_user_id)
-                     VALUES (:member_code, :full_name, :gender, :enrollment_date, :unit_id, :status, :enrollment_date, :remarks, :user_id, :user_id)
+                    "INSERT INTO members (member_code, full_name, gender, enrollment_date, current_unit_id, membership_status, status_effective_date, remarks, created_by_user_id, updated_by_user_id,
+                                          party, other_party_name, classification, classification_note, classification_set_at, classification_set_by_user_id)
+                     VALUES (:member_code, :full_name, :gender, :enrollment_date, :unit_id, :status, :enrollment_date, :remarks, :user_id, :user_id,
+                             :party, :other_party_name, :classification, :classification_note,
+                             CASE WHEN CAST(:classification AS VARCHAR) IS NULL THEN NULL ELSE CURRENT_TIMESTAMP END,
+                             CASE WHEN CAST(:classification AS VARCHAR) IS NULL THEN NULL ELSE CAST(:user_id AS BIGINT) END)
                      RETURNING id"
                 );
-                $statement->execute(['member_code' => $code, 'full_name' => $name, 'gender' => $gender, 'enrollment_date' => $enrollmentDate, 'unit_id' => $unitId, 'status' => $status, 'remarks' => trim((string) ($input['remarks'] ?? '')), 'user_id' => $this->auth->user()['id']]);
+                $statement->execute(['member_code' => $code, 'full_name' => $name, 'gender' => $gender, 'enrollment_date' => $enrollmentDate, 'unit_id' => $unitId, 'status' => $status, 'remarks' => trim((string) ($input['remarks'] ?? '')), 'user_id' => $userId] + $partyFields);
                 $memberId = (int) $statement->fetchColumn();
                 $eventType = 'new-enrollment';
             } else {
+                $classificationChanged = ($previous['classification'] ?? null) !== $partyFields['classification'];
                 $statement = $connection->prepare(
                     "UPDATE members SET full_name = :full_name, gender = :gender, enrollment_date = :enrollment_date,
                      current_unit_id = :unit_id, membership_status = :status, status_effective_date = CURRENT_DATE,
-                     remarks = :remarks, updated_by_user_id = :user_id, updated_at = CURRENT_TIMESTAMP WHERE id = :id"
+                     remarks = :remarks, updated_by_user_id = :user_id, updated_at = CURRENT_TIMESTAMP,
+                     party = :party, other_party_name = :other_party_name, classification = :classification, classification_note = :classification_note,
+                     classification_set_at = CASE WHEN CAST(:changed AS BOOLEAN) THEN CASE WHEN CAST(:classification AS VARCHAR) IS NULL THEN NULL ELSE CURRENT_TIMESTAMP END ELSE classification_set_at END,
+                     classification_set_by_user_id = CASE WHEN CAST(:changed AS BOOLEAN) THEN CASE WHEN CAST(:classification AS VARCHAR) IS NULL THEN NULL ELSE CAST(:user_id AS BIGINT) END ELSE classification_set_by_user_id END
+                     WHERE id = :id"
                 );
-                $statement->execute(['full_name' => $name, 'gender' => $gender, 'enrollment_date' => $enrollmentDate, 'unit_id' => $unitId, 'status' => $status, 'remarks' => trim((string) ($input['remarks'] ?? '')), 'user_id' => $this->auth->user()['id'], 'id' => $memberId]);
+                $statement->bindValue(':changed', $classificationChanged, \PDO::PARAM_BOOL);
+                foreach (['full_name' => $name, 'gender' => $gender, 'enrollment_date' => $enrollmentDate, 'unit_id' => $unitId, 'status' => $status, 'remarks' => trim((string) ($input['remarks'] ?? '')), 'user_id' => $userId, 'id' => $memberId] + $partyFields as $key => $value) {
+                    $statement->bindValue(':' . $key, $value);
+                }
+                $statement->execute();
                 $eventType = 'record-correction';
+            }
+            if ($previous === null || $previous['party'] !== $party || ($previous['classification'] ?? null) !== $partyFields['classification']) {
+                $history = $connection->prepare(
+                    "INSERT INTO party_classification_history (member_id, previous_party, new_party, previous_classification, new_classification, note, recorded_by_user_id)
+                     VALUES (:member_id, :previous_party, :new_party, :previous_classification, :new_classification, :note, :user_id)"
+                );
+                $history->execute(['member_id' => $memberId, 'previous_party' => $previous['party'] ?? null, 'new_party' => $party, 'previous_classification' => $previous['classification'] ?? null, 'new_classification' => $partyFields['classification'], 'note' => $partyFields['classification_note'], 'user_id' => $userId]);
             }
             $event = $connection->prepare(
                 "INSERT INTO membership_events (member_id, event_type, new_value, effective_date, recorded_by_user_id, reason)
                  VALUES (:member_id, :event_type, CAST(:new_value AS JSONB), CURRENT_DATE, :user_id, :reason)"
             );
-            $event->execute(['member_id' => $memberId, 'event_type' => $eventType, 'new_value' => json_encode(['status' => $status, 'unit_id' => $unitId], JSON_THROW_ON_ERROR), 'user_id' => $this->auth->user()['id'], 'reason' => 'Saved through member register.']);
+            $event->execute(['member_id' => $memberId, 'event_type' => $eventType, 'new_value' => json_encode(['status' => $status, 'unit_id' => $unitId, 'party' => $party, 'classification' => $partyFields['classification']], JSON_THROW_ON_ERROR), 'user_id' => $userId, 'reason' => 'Saved through the registered individuals register.']);
             $connection->commit();
         } catch (Throwable $exception) {
             $connection->rollBack();
@@ -507,7 +628,13 @@ final class Application
     {
         $rows = $this->database->connection()->query(
             "SELECT u.id, u.unit_code, u.name, d.name AS district_name, b.name AS block_name,
-                    count(m.id) AS member_count, public.ST_AsGeoJSON(u.representative_location)::json AS geometry
+                    count(m.id) AS member_count,
+                    count(m.id) FILTER (WHERE m.party = 'zpm') AS zpm_count,
+                    count(m.id) FILTER (WHERE m.party <> 'zpm') AS non_zpm_count,
+                    count(m.id) FILTER (WHERE m.classification = 'green') AS green_count,
+                    count(m.id) FILTER (WHERE m.classification = 'yellow') AS yellow_count,
+                    count(m.id) FILTER (WHERE m.classification = 'red') AS red_count,
+                    public.ST_AsGeoJSON(u.representative_location)::json AS geometry
              FROM units u INNER JOIN blocks b ON b.id = u.block_id INNER JOIN districts d ON d.id = b.district_id
              LEFT JOIN members m ON m.current_unit_id = u.id
              WHERE u.representative_location IS NOT NULL
@@ -523,6 +650,11 @@ final class Application
                 'district' => $row['district_name'],
                 'block' => $row['block_name'],
                 'member_count' => (int) $row['member_count'],
+                'zpm_count' => (int) $row['zpm_count'],
+                'non_zpm_count' => (int) $row['non_zpm_count'],
+                'classification' => (int) $row['non_zpm_count'] >= self::MAP_DISCLOSURE_THRESHOLD
+                    ? ['green' => (int) $row['green_count'], 'yellow' => (int) $row['yellow_count'], 'red' => (int) $row['red_count']]
+                    : null,
             ],
         ], $rows);
         header('Content-Type: application/geo+json; charset=utf-8');

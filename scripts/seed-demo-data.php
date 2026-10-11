@@ -130,7 +130,7 @@ try {
         $status = $number % 19 === 0 ? 'inactive' : 'active';
         $memberUpsert->execute([
             'member_code' => sprintf('DEMO-%05d', $number),
-            'full_name' => sprintf('Synthetic Demo Member %05d', $number),
+            'full_name' => sprintf('Synthetic Demo Individual %05d', $number),
             'gender' => ['female', 'male', 'not-specified'][$number % 3],
             'enrollment_date' => $enrollmentDate,
             'current_unit_id' => $unitId,

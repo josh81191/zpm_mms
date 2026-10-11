@@ -8,7 +8,7 @@
 </head>
 <body>
     <header class="app-header">
-        <p class="brand">ZPM Membership Management</p>
+        <p class="brand">ZPM Registry &amp; GIS</p>
         <div class="user-menu">
             <span><?= htmlspecialchars($user['full_name'], ENT_QUOTES, 'UTF-8') ?></span>
             <form method="post" action="<?= htmlspecialchars($basePath, ENT_QUOTES, 'UTF-8') ?>/logout">
@@ -25,15 +25,15 @@
                 <h2>Report filters</h2>
                 <form class="filter-grid" method="get" action="<?= htmlspecialchars($basePath, ENT_QUOTES, 'UTF-8') ?>/reports">
                     <div class="field">
-                        <label for="date_from">Enrollment from</label>
+                        <label for="date_from">Registration from</label>
                         <input id="date_from" name="date_from" type="date" value="<?= htmlspecialchars($filters['date_from'], ENT_QUOTES, 'UTF-8') ?>">
                     </div>
                     <div class="field">
-                        <label for="date_to">Enrollment to</label>
+                        <label for="date_to">Registration to</label>
                         <input id="date_to" name="date_to" type="date" value="<?= htmlspecialchars($filters['date_to'], ENT_QUOTES, 'UTF-8') ?>">
                     </div>
                     <div class="field">
-                        <label for="status">Membership status</label>
+                        <label for="status">Status</label>
                         <select id="status" name="status">
                             <option value="">All statuses</option>
                             <?php foreach (['active', 'inactive', 'resigned', 'deceased', 'archived'] as $status): ?>
@@ -50,26 +50,46 @@
                             <?php endforeach; ?>
                         </select>
                     </div>
+                    <div class="field">
+                        <label for="party">Party</label>
+                        <select id="party" name="party">
+                            <option value="">All parties</option>
+                            <?php foreach (['zpm' => 'ZPM', 'mnf' => 'MNF', 'congress' => 'Congress', 'bjp' => 'BJP', 'other' => 'Other'] as $key => $label): ?>
+                                <option value="<?= $key ?>" <?= $filters['party'] === $key ? 'selected' : '' ?>><?= $label ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="classification">Classification</label>
+                        <select id="classification" name="classification">
+                            <option value="">All</option>
+                            <?php foreach (['green' => 'Green', 'yellow' => 'Yellow', 'red' => 'Red'] as $key => $label): ?>
+                                <option value="<?= $key ?>" <?= $filters['classification'] === $key ? 'selected' : '' ?>><?= $label ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                     <div class="filter-actions">
                         <button type="submit">Apply filters</button>
                         <a class="button-link" href="<?= htmlspecialchars($basePath, ENT_QUOTES, 'UTF-8') ?>/reports">Clear</a>
                     </div>
                 </form>
-                <p class="muted">Definitions: totals are current member records matching the selected enrollment and status filters. No estimates are included.</p>
+                <p class="muted">Definitions: totals are current registered-individual records matching the selected registration and status filters. No estimates are included.</p>
             </section>
 
             <section class="stat-grid" aria-label="Filtered report summary">
-                <article class="stat-card"><p class="stat-label">Recorded members</p><p class="stat-value"><?= number_format((int) $stats['total_members']) ?></p></article>
-                <article class="stat-card"><p class="stat-label">Active members</p><p class="stat-value"><?= number_format((int) $stats['active_members']) ?></p></article>
+                <article class="stat-card"><p class="stat-label">Registered individuals</p><p class="stat-value"><?= number_format((int) $stats['total_members']) ?></p></article>
+                <article class="stat-card"><p class="stat-label">Active individuals</p><p class="stat-value"><?= number_format((int) $stats['active_members']) ?></p></article>
                 <article class="stat-card"><p class="stat-label">Inactive or departed</p><p class="stat-value"><?= number_format((int) $stats['inactive_members']) ?></p></article>
-                <article class="stat-card"><p class="stat-label">Enrolled in last 30 days</p><p class="stat-value"><?= number_format((int) $stats['recent_enrollments']) ?></p></article>
+                <article class="stat-card"><p class="stat-label">Registered in last 30 days</p><p class="stat-value"><?= number_format((int) $stats['recent_enrollments']) ?></p></article>
             </section>
+
+            <?php require __DIR__ . '/partials/breakdown.php'; ?>
 
             <section class="report-grid">
                 <article class="content-card">
-                    <div class="section-heading"><h2>Members by district</h2><a class="button-link" href="<?= htmlspecialchars($basePath, ENT_QUOTES, 'UTF-8') ?>/reports/export.csv?<?= http_build_query($filters) ?>">Export CSV</a></div>
+                    <div class="section-heading"><h2>Registered individuals by district</h2><a class="button-link" href="<?= htmlspecialchars($basePath, ENT_QUOTES, 'UTF-8') ?>/reports/export.csv?<?= http_build_query($filters) ?>">Export CSV</a></div>
                     <table>
-                        <thead><tr><th>District</th><th>Members</th></tr></thead>
+                        <thead><tr><th>District</th><th>Individuals</th></tr></thead>
                         <tbody>
                         <?php foreach ($districtRows as $row): ?>
                             <tr><td><?= htmlspecialchars($row['name'], ENT_QUOTES, 'UTF-8') ?></td><td><?= number_format((int) $row['member_count']) ?></td></tr>
@@ -78,14 +98,14 @@
                     </table>
                 </article>
                 <article class="content-card">
-                    <h2>Enrollment trend</h2>
+                    <h2>Registration trend</h2>
                     <?php if ($trendRows === []): ?>
-                        <p class="muted">No enrollment records match the selected filters.</p>
+                        <p class="muted">No registration records match the selected filters.</p>
                     <?php else: ?>
                         <div class="trend-list">
                         <?php $maxTrend = max(array_map(static fn (array $row): int => (int) $row['member_count'], $trendRows)); ?>
                         <?php foreach ($trendRows as $row): ?>
-                            <div class="trend-row"><span><?= htmlspecialchars($row['month'], ENT_QUOTES, 'UTF-8') ?></span><div class="bar"><span style="width: <?= $maxTrend > 0 ? ((int) $row['member_count'] / $maxTrend) * 100 : 0 ?>%"></span></div><strong><?= (int) $row['member_count'] ?></strong></div>
+                            <div class="trend-row"><span><?= htmlspecialchars($row['month'], ENT_QUOTES, 'UTF-8') ?></span><div class="bar"><span data-width="<?= $maxTrend > 0 ? round(((int) $row['member_count'] / $maxTrend) * 100, 1) : 0 ?>"></span></div><strong><?= (int) $row['member_count'] ?></strong></div>
                         <?php endforeach; ?>
                         </div>
                     <?php endif; ?>
@@ -95,14 +115,15 @@
             <section class="content-card">
                 <h2>Data quality checks</h2>
                 <div class="quality-grid">
-                    <div><strong><?= number_format((int) ($quality['units_without_members'] ?? 0)) ?></strong><span>Active units without members</span></div>
-                    <div><strong><?= number_format((int) ($quality['active_members_in_inactive_units'] ?? 0)) ?></strong><span>Active members in inactive units</span></div>
-                    <div><strong><?= number_format((int) ($quality['members_without_epci'] ?? 0)) ?></strong><span>Members without EPCI</span></div>
+                    <div><strong><?= number_format((int) ($quality['units_without_members'] ?? 0)) ?></strong><span>Active units without individuals</span></div>
+                    <div><strong><?= number_format((int) ($quality['active_members_in_inactive_units'] ?? 0)) ?></strong><span>Active individuals in inactive units</span></div>
+                    <div><strong><?= number_format((int) ($quality['members_without_epci'] ?? 0)) ?></strong><span>Individuals without EPCI</span></div>
                     <div><strong><?= number_format((int) ($quality['possible_duplicate_groups'] ?? 0)) ?></strong><span>Possible duplicate groups</span></div>
                 </div>
-                <p class="muted">These checks identify records for authorized review. They do not automatically modify, merge, or classify member records.</p>
+                <p class="muted">These checks identify records for authorized review. They do not automatically modify, merge, or change registered individual records.</p>
             </section>
         </main>
     </div>
+    <script src="<?= htmlspecialchars($basePath, ENT_QUOTES, 'UTF-8') ?>/assets/app.js"></script>
 </body>
 </html>

@@ -11,14 +11,24 @@
 
 <body>
   <header class="app-header">
-    <p class="brand">ZPM Membership Management</p>
+    <p class="brand">ZPM Registry &amp; GIS</p>
     <div class="user-menu"><span><?php echo htmlspecialchars($user['full_name'], ENT_QUOTES, 'UTF-8') ?></span></div>
   </header>
   <div class="layout"><?php require __DIR__ . '/partials/nav.php'; ?><main class="main">
       <h1>GIS &amp; Maps</h1>
       <section class="content-card">
-        <p class="muted">Development map showing synthetic unit reference points and aggregate member counts. No
-          individual members are geolocated.</p>
+        <p class="muted">Development map showing synthetic unit reference points and aggregate counts of registered
+          individuals. No individual is geolocated; classification counts are hidden for units with fewer than 5 non-ZPM individuals.</p>
+        <div class="field map-mode"><label for="map-mode">Show</label>
+          <select id="map-mode">
+            <option value="total">All registered individuals</option>
+            <option value="zpm">ZPM</option>
+            <option value="non_zpm">Non-ZPM (all)</option>
+            <option value="green">Non-ZPM — Green</option>
+            <option value="yellow">Non-ZPM — Yellow</option>
+            <option value="red">Non-ZPM — Red</option>
+          </select></div>
+        <?php require __DIR__ . '/partials/legend.php'; ?>
         <div id="map" class="map" aria-label="Unit aggregate map"></div>
       </section>
     </main>
