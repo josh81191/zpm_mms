@@ -815,3 +815,41 @@ Before making major architectural decisions, confirm the relevant requirements w
 Keep the system understandable to both the office staff using it and the developers maintaining it.
 
 Should run on localhost for development and testing purposes. I have XAMPP installed for this purpose. And db is local too. Ensure that the local environment mirrors the production environment as closely as possible to avoid deployment issues.
+
+
+## 25. Current Implementation Status (reference for agents)
+
+This section describes what exists today. Sections 1–24 remain the requirements; where they differ, this section records what was actually built and the decisions taken.
+
+### Runtime and compatibility
+
+- PHP **7.4 or later** is supported (the shared host runs 7.4). Do not use PHP 8-only syntax: no `match`, constructor property promotion, `catch` without a variable, union types, `readonly`, nullsafe `?->`, or named arguments. `app/polyfills.php` supplies `str_starts_with`, `str_ends_with` and `str_contains`.
+- PostgreSQL with PostGIS. The production server's PostgreSQL is older than 11: use `EXECUTE PROCEDURE` (not `EXECUTE FUNCTION`) in triggers, and do not use psql `\if`/`\gset` in deployment SQL.
+- All application tables live in the `zpm_mms` schema; PostGIS lives in `public`.
+
+### Layout
+
+- `public/` – web root (`index.php` front controller, `assets/` with `app.css`, `app.js`, `gis.js`, `ask.js`). `base_path` in `config/config.php` is stripped from the request URI for routing.
+- `app/` – `Application` (routes and handlers), `Auth`, `Csrf`, `Database`, `View`, `QueryEngine`, `AiPlanner`, `polyfills.php`. The autoloader is in `public/index.php` and `scripts/bootstrap.php`.
+- `templates/` – server-rendered pages; `templates/partials/header.php` is the single shared top bar (title "ZPM Member Registry", user, Sign out) used by every page.
+- `database/migrations/` 001–005; `scripts/` for migration, user creation and development-only demo seeding.
+- `deploy/` – `init.sql` (complete schema for a fresh server, no role/extension statements), `01_db_setup.sql`, `config.production.example.php`, `apache-vhost.conf`, `backup.sh`, `package.ps1`, `DEPLOYMENT.md`. `deploy/data.sql` is a local data export containing personal data and password hashes; it is gitignored and must never be committed.
+
+### Implemented modules
+
+- Authentication, roles and permissions, CSRF, audit log.
+- Registered individuals (the member register): search, pagination, party and classification filters, **district/block/unit cascading filters**, create/edit/archive, family heads (one level, enforced by a trigger).
+- Organization: districts, blocks, units.
+- Dashboard, reports, CSV export, data quality checks, party migration chart.
+- **GIS (`/gis`, `/gis/party-data?level=district|block`)**: Leaflet map showing a party-population pie marker per district or per block (no unit-level data). Counts below `MAP_DISCLOSURE_THRESHOLD` (5) are suppressed. Selecting a district or block zooms to it and shows its data. Current district and block geometry is point-only (`representative_location`); there are no boundary polygons yet.
+- **AI analysis (`POST /reports/ask`)**: a question planner using any OpenAI-compatible chat API (configured in the `ai` block). Only the question text, a data-free schema and aggregate counts (small groups suppressed) are sent; never member records. Failure detail is returned as `debug` in the JSON response and logged to the browser console and the PHP error log; API keys are never logged or returned. `gpt-oss` models get `reasoning_effort` low and a larger completion limit.
+
+### Deployment notes
+
+- Production target is shared hosting (no root, no Ollama). Free hosted AI option: Groq (`https://api.groq.com/openai/v1`); the model must be one the key can access (check `/models`; `openai/gpt-oss-20b` worked in this deployment).
+- Real `config/config.php` is gitignored and edited by hand on each server: `environment` `production`, correct `base_path`, database credentials, `ai.enabled`, and the API key. Never commit keys or paste them in chat.
+- Load a fresh server with `deploy/init.sql`; optionally load sample data with `deploy/data.sql` (it truncates app tables first).
+
+### Not yet done
+
+Activities module, member designation history UI, affiliation history beyond party classification, boundary polygon import, PDF/Excel export, backup restoration testing, automated tests.

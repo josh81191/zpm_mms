@@ -4,9 +4,9 @@ This repository contains a locally runnable development demo of the ZPM Registry
 
 ## Prerequisites
 
-- XAMPP with Apache and PHP 8.0 or later.
-- PHP extensions enabled in `C:\xampp\php\php.ini`: `pdo_pgsql` and `pgsql`.
-- PostgreSQL 14 or later. Install PostGIS before the Phase 5 GIS implementation.
+- XAMPP with Apache and PHP 7.4 or later.
+- PHP extensions enabled in `C:\xampp\php\php.ini`: `pdo_pgsql`, `pgsql`, `mbstring` and `curl`.
+- PostgreSQL 10 or later with PostGIS installed.
 
 Use a dedicated PostgreSQL application account with only the database privileges the application requires. Do not use the PostgreSQL superuser for web requests.
 
@@ -131,3 +131,38 @@ The script is idempotent and development-only.
 An individual can be tied to a family head (another registered individual) from the register form. Only one level is allowed: a head has no head of their own, and a head with linked members cannot be archived or tied to another head. Rules are enforced in the application and by a database trigger (migration 005). Demo families:
 
     C:\xampp\php\php.exe scripts\seed-demo-families.php
+
+## PHP, database and hosting compatibility
+
+The application runs on **PHP 7.4 or later** (PHP 8.x also works) and PostgreSQL 10 or later with PostGIS. Avoid PHP 8-only syntax when contributing; `app/polyfills.php` provides `str_starts_with`, `str_ends_with` and `str_contains`.
+
+## GIS map
+
+`/gis` shows a party-population pie marker for each district or, after switching the level, each block. There is no unit-level data. Party counts under 5 are suppressed. Choosing a district or block zooms to it and shows its figures. The demo geometry is a set of reference points, not administrative boundaries.
+
+## Registered individuals filters
+
+`/individuals` can be filtered by district, block and unit (cascading selects) as well as by search text, party, classification, status and family role.
+
+## AI analysis
+
+The Analysis & Reports page can answer aggregate questions in plain language. It calls any OpenAI-compatible chat API configured in the `ai` block of `config/config.php`:
+
+    'ai' => [
+        'enabled'  => true,
+        'base_url' => 'https://api.groq.com/openai/v1',   // or http://localhost:11434/v1 for Ollama
+        'model'    => 'openai/gpt-oss-20b',               // must be a model your key can access
+        'api_key'  => '',
+        'timeout'  => 40,
+    ],
+
+Only the question, a data-free schema and aggregate counts (small groups suppressed) are sent. Member records are never sent. If a request fails, the cause appears in the browser console (`AI analysis error: ...`) and the PHP error log. Using a third-party provider needs the project owner's explicit approval.
+
+## Deployment
+
+See `deploy/DEPLOYMENT.md` and the files in `deploy/`:
+
+- `deploy/init.sql` creates the complete schema on a fresh database: `psql -U <user> -d <database> -f deploy/init.sql`.
+- `deploy/config.production.example.php` is the production configuration template.
+- `deploy/data.sql` (local export of the demo data, gitignored because it contains personal data and password hashes) can be copied to the server and loaded with `psql -f`. It truncates the application tables first.
+- On shared hosting, select PHP 7.4 or later and enable `pdo_pgsql`, `pgsql`, `mbstring` and `curl`. Set `environment` to `production` and `base_path` to the URL path of the site.
