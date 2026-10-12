@@ -1,4 +1,4 @@
-# ZPM Registry & GIS
+# ZPM Registry
 
 This repository contains a locally runnable development demo of the ZPM Registry, Political Analysis, and GIS Decision Support System. It includes secure authentication, role-based authorization, PostgreSQL/PostGIS migrations, organizational hierarchy, registered-individuals workflows, audit logging, reports and CSV export, and aggregate GIS visualization.
 
